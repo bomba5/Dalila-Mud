@@ -1,4 +1,2 @@
-*.json
-*.yml
-*.csv
-
+src/*.o
+bin/circle

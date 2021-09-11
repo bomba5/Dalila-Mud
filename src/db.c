@@ -69,7 +69,7 @@ int mini_mud = 0;		/* mini-mud mode?		*/
 int no_rent_check = 0;		/* skip rent check on boot?	*/
 time_t boot_time = 0;		/* time of mud boot		*/
 time_t tempo_totale = 0;	/* tempo totale trascorso dal 21 settembre 2004	*/
-int restrict = 0;		/* level of game restriction	*/
+int l_restrict = 0;		/* level of game restriction	*/
 room_rnum r_mortal_start_room[NUM_STARTROOMS +1];	/* rnum of mortal start room	*/
 room_rnum r_immort_start_room;	/* rnum of immort start room	*/
 room_rnum r_frozen_start_room;	/* rnum of frozen start room	*/
@@ -1512,14 +1512,14 @@ void load_zones(FILE * fl, char *zonename)
 	if ((ptr = strchr(buf, '~')) != NULL)	/* take off the '~' if it's there */
 		*ptr = '\0';
 	Z.name = str_dup(buf);
-	
+/*	
 	line_num += get_line(fl, buf);
 	Z.wilderness = ZONE_NORMAL_AREA; // In wilderness.h
 	if (sscanf(buf, " %d %d %d %d ", &Z.top, &Z.lifespan, &Z.reset_mode, &Z.wilderness) < 3) {
 		fprintf(stderr, "Format error in (3 or 4) - constant line of %s", zname);
 		exit(0);
 	}
-	
+*/	
 	if (Z.wilderness == ZONE_MINIWILD)
 	{
 		line_num += get_line(fl, buf);
