@@ -15,7 +15,7 @@ PROFILE =
 # Do Not Modify Anything Below This Line (unless you know what you're doing) #
 ##############################################################################
 
-CFLAGS = -g -O $(MYFLAGS) $(PROFILE)
+CFLAGS = -g -O $(MYFLAGS) $(PROFILE) -fcommon
 
 OBJFILES = comm.o act.comm.o act.informative.o act.movement.o act.item.o \
     act.offensive.o act.other.o act.social.o act.wizard.o ban.o boards.o \
