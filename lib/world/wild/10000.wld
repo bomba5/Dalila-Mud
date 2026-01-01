@@ -494,6 +494,18 @@ D4
 F
  0 0 0 0 0 0 0 0 0 0
 S
+#1463554
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D3
+~
+~
+1 0 5211 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
 #1464499
 Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
@@ -503,6 +515,18 @@ D2
 ~
 ~
 0 0 1208 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
+#1465411
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D2
+~
+~
+1 0 40135 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -527,6 +551,18 @@ D4
 ~
 ~
 0 0 19120 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
+#1465552
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D0
+~
+~
+1 0 5200 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -591,6 +627,18 @@ D4
 ~
 ~
 0 0 1350 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
+#1475414
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D5
+~
+~
+1 0 -1 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1226,6 +1274,18 @@ D2
 F
  0 0 0 0 0 0 0 0 0 0
 S
+#1499438
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D0
+~
+~
+1 -1 18700 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
 #1499445
 Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
@@ -1367,6 +1427,18 @@ D3
 ~
 ~
 0 0 6027 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
+#1503486
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D2
+~
+~
+1 0 9247 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1778,6 +1850,18 @@ D3
 F
  0 0 0 0 0 0 0 0 0 0
 S
+#1525588
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D2
+~
+~
+1 0 2001 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
 #1527447
 Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
@@ -1823,6 +1907,18 @@ D0
 ~
 ~
 0 0 16242 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
+#1535505
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D0
+~
+~
+1 0 8116 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2211,6 +2307,18 @@ D0
 ~
 ~
 0 0 24000 0
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
+#1579484
+Ingresso area~
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
+D5
+~
+~
+2 1381 1381 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
