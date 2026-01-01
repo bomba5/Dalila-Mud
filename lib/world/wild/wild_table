@@ -3352,7 +3352,21 @@ Le case degli abitanti (contenti loro a vivere in questo postaccio...)
 Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
-+ 6 0
+@ 6 0
 4 0 1
 1 0
+#9001
+Pianura estesa~
+Una distesa pianeggiante si estende a perdita d'occhio.
+~
+_ 8 0
+3 1500 1
+2 0
+#9002
+Colline ondulate~
+Dolci colline si susseguono all'orizzonte.
+~
+H 4 0
+4 1000 1
+4 0
 $
