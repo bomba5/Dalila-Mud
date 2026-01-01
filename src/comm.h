@@ -60,7 +60,7 @@ typedef RETSIGTYPE sigfunc(int);
 
 /* Function prototypes for brain-dead OS's */
 
-#if defined(__COMM_C__) && defined(__GNUC__)
+#if defined(__COMM_C__) && defined(__GNUC__) && !defined(__clang__)
 
 #ifndef accept
    int accept();
@@ -131,4 +131,4 @@ typedef RETSIGTYPE sigfunc(int);
 //   int write();
 #endif
 
-#endif /* __COMM_C__ */
+#endif /* __COMM_C__ && __GNUC__ && !__clang__ */

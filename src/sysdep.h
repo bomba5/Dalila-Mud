@@ -200,7 +200,7 @@ typedef int socket_t;
 //unsigned long random(void);
 #endif
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__)
 
 #ifdef HAVE_RANDOM
 
@@ -290,4 +290,4 @@ typedef int socket_t;
    int unlink();
 #endif
 
-#endif /* __GNUC__ */
+#endif /* __GNUC__ && !__clang__ */
