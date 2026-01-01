@@ -218,7 +218,8 @@ void boot_social_messages(void)
   if (!(fl = fopen(SOCMESS_FILE, "r"))) {
     sprintf(buf, "Can't open socials file '%s'", SOCMESS_FILE);
     perror(buf);
-    exit(1);
+    log("SYSERR: socials file missing; socials disabled.");
+    return;
   }
   /* count socials & allocate space */
   for (nr = 0; *cmd_info[nr].command != '\n'; nr++)

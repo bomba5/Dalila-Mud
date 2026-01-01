@@ -207,17 +207,18 @@ void load_messages(void)
 	struct message_type *messages;
 	char chk[128];
 	
-	if (!(fl = fopen(MESS_FILE, "r"))) {
-		sprintf(buf2, "Error reading combat message file %s", MESS_FILE);
-		perror(buf2);
-		exit(1);
-	}
 	for (i = 0; i < MAX_MESSAGES; i++) {
 		fight_messages[i].a_type = 0;
 		fight_messages[i].number_of_attacks = 0;
 		fight_messages[i].msg = 0;
 	}
 	
+	if (!(fl = fopen(MESS_FILE, "r"))) {
+		sprintf(buf2, "Error reading combat message file %s", MESS_FILE);
+		perror(buf2);
+		log("SYSERR: combat messages disabled.");
+		return;
+	}
 	
 	fgets(chk, 128, fl);
 	while (!feof(fl) && (*chk == '\n' || *chk == '*'))
@@ -813,27 +814,28 @@ void load_corpse(void)
 	FILE *crps_file;
 	struct obj_data *temp;
 
+	corpse_maxnum = 0;
 	if (!(crps_index = fopen ("corpse/index", "r+"))){
 		perror ("SYSERR: Impossibile caricare il file di index dei cadaveri");
-		exit(1);
-	}
-	corpse_maxnum = 0;
-
-	fscanf (crps_index, "%s\n", buf1);
-	while (*buf1 != '$'){
-		sprintf (buf2, "corpse/%s", buf1);
-		if (!(crps_file = fopen (buf2, "r"))){
-			sprintf (buf2, "SYSERR: %s nel file di index dei corpi. File non esistente!", buf2);
-			log (buf2);
-			continue;
-		}
-		corpse_maxnum = MAX (corpse_maxnum, atoi (buf1));
-
-		if (!(make_corpse_from_file (crps_file, atoi(buf1))))
-			log("SYSERR: impossibile creare un cadavere.");
-
-		fclose (crps_file);
+		log("SYSERR: corpse index missing; starting empty.");
+	} else {
 		fscanf (crps_index, "%s\n", buf1);
+		while (*buf1 != '$'){
+			sprintf (buf2, "corpse/%s", buf1);
+			if (!(crps_file = fopen (buf2, "r"))){
+				sprintf (buf2, "SYSERR: %s nel file di index dei corpi. File non esistente!", buf2);
+				log (buf2);
+				continue;
+			}
+			corpse_maxnum = MAX (corpse_maxnum, atoi (buf1));
+
+			if (!(make_corpse_from_file (crps_file, atoi(buf1))))
+				log("SYSERR: impossibile creare un cadavere.");
+
+			fclose (crps_file);
+			fscanf (crps_index, "%s\n", buf1);
+		}
+		fclose (crps_index);
 	}
 
 	/* Questa e' una pezza schifosa dovuta al fatto che sembra che sul pc
@@ -842,7 +844,6 @@ void load_corpse(void)
 	   la stessa fine.	*/
 	temp = read_object (CADVNUM, VIRTUAL);
 	obj_to_room (temp, real_room (1600));
-	fclose (crps_index);
 }
 
 
@@ -852,10 +853,9 @@ void corpse_save (struct char_data *ch)
 	struct obj_data *o, *oc;
 	int i;
 
-	if (!(crps_index = fopen ("corpse/index", "r"))){
+	crps_index = fopen ("corpse/index", "r");
+	if (!crps_index)
 		perror ("SYSERR: Impossibile caricare il file di index dei cadaveri");
-		exit(1);
-	}
 
 	sprintf (buf, "corpse/%d.crps", ++corpse_maxnum);
 	if (!(fl = fopen (buf, "w"))){
@@ -893,19 +893,24 @@ void corpse_save (struct char_data *ch)
 
 
 	// Modifica index
-	get_line (crps_index, buf1);
-	sprintf (buf2, "%s\n", buf1);
-	if (*buf2 != '$')
-		while (get_line (crps_index, buf1)){
-			if (*buf1 == '$')
-				sprintf (buf2, "%s%d.crps\n$\n", buf2, corpse_maxnum);
+	buf2[0] = '\0';
+	if (crps_index) {
+		if (get_line (crps_index, buf1)) {
+			sprintf (buf2, "%s\n", buf1);
+			if (*buf2 != '$')
+				while (get_line (crps_index, buf1)){
+					if (*buf1 == '$')
+						sprintf (buf2, "%s%d.crps\n$\n", buf2, corpse_maxnum);
+					else
+						sprintf (buf2, "%s%s\n", buf2, buf1);
+				}
 			else
-				sprintf (buf2, "%s%s\n", buf2, buf1);
+				sprintf (buf2, "%d.crps\n$\n", corpse_maxnum);
 		}
-	else
+		fclose (crps_index);
+	}
+	if (!buf2[0])
 		sprintf (buf2, "%d.crps\n$\n", corpse_maxnum);
-
-	fclose (crps_index);
 
 	if (!(crps_index = fopen ("corpse/index", "w"))){
 		perror ("SYSERR: Impossibile rinnovare il file di index dei cadaveri");
@@ -924,26 +929,28 @@ void destroy_corpse_file (struct obj_data *j)
 		remove (buf);
 		if (!(crps_index = fopen ("corpse/index", "r"))){
 			perror ("SYSERR: Impossibile caricare il file di index dei cadaveri");
-			exit(1);
-		}			// il file di index viene aggiornato
-		sprintf (buf, "%d.crps", GET_OBJ_VAL (j, 4));
-		if (buf2[0])
-		buf2[0] = '\0';
-		do{
-			get_line (crps_index, buf1);
-			if (strcmp (buf, buf1))
-				sprintf (buf2, "%s%s\n", buf2, buf1);
-			if (*buf1 == '$')
-				break;
+			log("SYSERR: corpse index missing; skipping update.");
+		} else {			// il file di index viene aggiornato
+			sprintf (buf, "%d.crps", GET_OBJ_VAL (j, 4));
+			if (buf2[0])
+			buf2[0] = '\0';
+			do{
+				get_line (crps_index, buf1);
+				if (strcmp (buf, buf1))
+					sprintf (buf2, "%s%s\n", buf2, buf1);
+				if (*buf1 == '$')
+					break;
+			}
+			while (1);
+			fclose (crps_index);
+			if (!(crps_index = fopen ("corpse/index", "w"))){
+				perror ("SYSERR: Impossibile rinnovare il file di index dei cadaveri");
+				log("SYSERR: corpse index missing; skipping update.");
+			} else {
+				fprintf (crps_index, buf2);
+				fclose (crps_index);
+			}
 		}
-		while (1);
-		fclose (crps_index);
-		if (!(crps_index = fopen ("corpse/index", "w"))){
-			perror ("SYSERR: Impossibile rinnovare il file di index dei cadaveri");
-			exit(1);
-		}
-		fprintf (crps_index, buf2);
-		fclose (crps_index);
 	/* Questo if e' un sanity check abbastanza inutile, che dovrebbe servire ad evitare grossi problemi
 	   qualora alcuni numeri vengano saltati. La presenza di questo sanity check, poi, potrebbe comportare,
 	   in caso di decomposizioni simultanee, lo stesso salto di alcuni numeri nei salvataggi successivi,

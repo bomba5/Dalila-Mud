@@ -442,14 +442,22 @@ void boot_db(void)
 	random_mobiles();
 	
 	log("Reset risorse");
-	reset_risorse(RES_PIETRE);
-	reset_risorse(RES_ALBERI); 
-	reset_risorse(RES_GEMME);	
-	reset_risorse(RES_ROCCE);
-	reset_risorse(RES_NATURA);	
-	reset_risorse(RES_ERBE);
-	reset_risorse(RES_SELVAGGINA);	
-	reset_risorse(RES_AMMAESTRABILI);		
+	{
+		room_rnum wild_start = real_room(WILD_VNUM(WILD_RXOR, WILD_RYOR));
+		room_rnum wild_end = real_room(WILD_VNUM(WILD_RXEN, WILD_RYEN));
+		if (wild_start == NOWHERE || wild_end == NOWHERE) {
+			log("Wilderness non caricata: salto reset risorse.");
+		} else {
+			reset_risorse(RES_PIETRE);
+			reset_risorse(RES_ALBERI);
+			reset_risorse(RES_GEMME);
+			reset_risorse(RES_ROCCE);
+			reset_risorse(RES_NATURA);
+			reset_risorse(RES_ERBE);
+			reset_risorse(RES_SELVAGGINA);
+			reset_risorse(RES_AMMAESTRABILI);
+		}
+	}
 	
 	log("Player Deleted:");
 	clear_noplayer_pg();
@@ -673,16 +681,16 @@ void index_boot(int mode)
 		sprintf(buf2, "%s/%s", prefix, buf1);
 		if (!(db_file = fopen(buf2, "r"))) {
 			perror(buf2);
-			log("file listed in index not found");
-			exit(1);
+			sprintf(buf, "SYSERR: %s listed in index not found (skipping)", buf2);
+			log(buf);
 		} else {
 			if (mode == DB_BOOT_ZON)
 				rec_count++;
 			else
 				rec_count += count_hash_records(db_file);
+			fclose(db_file);
 		}
 		
-		fclose(db_file);
 		fscanf(index, "%s\n", buf1);
 	}
 	
@@ -725,7 +733,10 @@ void index_boot(int mode)
 		sprintf(buf2, "%s/%s", prefix, buf1);
 		if (!(db_file = fopen(buf2, "r"))) {
 			perror(buf2);
-			exit(1);
+			sprintf(buf, "SYSERR: %s listed in index not found (skipping)", buf2);
+			log(buf);
+			fscanf(index, "%s\n", buf1);
+			continue;
 		}
 		switch (mode) {
 			case DB_BOOT_TRG:
@@ -898,6 +909,12 @@ void parse_room(FILE * fl, int virtual_nr)
 		switch (*line) {
 			case 'D':
 				setup_dir(fl, room_nr, atoi(line + 1));
+				break;
+			case 'F':
+				if (!get_line(fl, line)) {
+					fprintf(stderr, "%s\n", buf);
+					exit(1);
+				}
 				break;
 			case 'E':
 				CREATE(new_descr, struct extra_descr_data, 1);
@@ -1512,14 +1529,33 @@ void load_zones(FILE * fl, char *zonename)
 	if ((ptr = strchr(buf, '~')) != NULL)	/* take off the '~' if it's there */
 		*ptr = '\0';
 	Z.name = str_dup(buf);
-/*	
+
 	line_num += get_line(fl, buf);
 	Z.wilderness = ZONE_NORMAL_AREA; // In wilderness.h
-	if (sscanf(buf, " %d %d %d %d ", &Z.top, &Z.lifespan, &Z.reset_mode, &Z.wilderness) < 3) {
-		fprintf(stderr, "Format error in (3 or 4) - constant line of %s", zname);
+	{
+	int a, b, c, d, e;
+	int fields = sscanf(buf, " %d %d %d %d %d ", &a, &b, &c, &d, &e);
+	if (fields < 3) {
+		fprintf(stderr, "Format error in (3 to 5) - constant line of %s", zname);
 		exit(0);
 	}
-*/	
+	if (fields == 3) {
+		Z.top = a;
+		Z.lifespan = b;
+		Z.reset_mode = c;
+	} else if (fields == 4) {
+		Z.top = a;
+		Z.lifespan = b;
+		Z.reset_mode = c;
+		Z.wilderness = d;
+	} else {
+		Z.top = b;
+		Z.lifespan = c;
+		Z.reset_mode = d;
+		Z.wilderness = e;
+	}
+	}
+	
 	if (Z.wilderness == ZONE_MINIWILD)
 	{
 		line_num += get_line(fl, buf);
@@ -3815,17 +3851,29 @@ void clear_noplayer_pg()
 void old_player_restore() {
 	struct char_file_u fch;
 	FILE *ren_player_fl;
+	size_t read_count;
 
 	ren_player_fl = fopen(REN_PLAYER_FILE, "r");
-	for (; !feof(ren_player_fl); ) {
-		fread(&fch, sizeof(struct char_file_u), 1, ren_player_fl);
+	if (!ren_player_fl) {
+		perror("SYSERR: Impossibile aprire etc/ren_players");
+		log("SYSERR: ren_players assente; salto reinserimento player.");
+		return;
+	}
+	if (!player_fl) {
+		log("SYSERR: player file non aperto; salto reinserimento player.");
+		fclose(ren_player_fl);
+		return;
+	}
+
+	while ((read_count = fread(&fch, sizeof(struct char_file_u), 1, ren_player_fl)) == 1) {
 		fseek(player_fl, 0L, SEEK_END);
 		fwrite(&fch, sizeof(struct char_file_u), 1, player_fl);
 	}
 
 	fclose(ren_player_fl);
 	ren_player_fl = fopen(REN_PLAYER_FILE, "w");
-	fclose(ren_player_fl);
+	if (ren_player_fl)
+		fclose(ren_player_fl);
 }
 
 void loadreward(struct char_data *vict)
