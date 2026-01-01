@@ -45,6 +45,10 @@ Una porta di legno.
 ~
 porta~
 1 865740 40478 135
+D2
+~
+~
+0 0 6897 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -131,6 +135,14 @@ D1
 ~
 cancellata~
 2 574 6847 9
+D3
+~
+~
+0 0 648 0
+D1
+~
+~
+0 0 20599 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -305,6 +317,18 @@ Strada della Capitale~
 Questa strada lastricata e' stata fatta costruire da Re Otak in persona.
 ~
 20900 0 1
+F
+ 0 0 0 0 0 0 0 0 0 0
+S
+#2095057
+Area transitabile~
+Sei in un'area transitabile.
+~
+20900 0 1
+D0
+~
+~
+0 0 1794 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
