@@ -2332,23 +2332,23 @@ void nanny(struct descriptor_data *d, char *arg)
 					}
 					
 					// Orione - verifico se esiste nel file old_player
-					if (!(old_player_fl = fopen(OLD_PLAYER_FILE, "r"))){
-						SEND_TO_Q("Errore di caricamento - Impossibile creare nuovi pg\r\n", d);
-						sprintf (buf, "ATTENZIONE: impossibile aprire il file %s. Non si possono creare nuovi pg per permettere al mud di caricarsi.", OLD_PLAYER_FILE);
+					old_player_fl = fopen(OLD_PLAYER_FILE, "r");
+					if (!old_player_fl) {
+						sprintf (buf, "ATTENZIONE: impossibile aprire il file %s. Controllo old_players saltato.", OLD_PLAYER_FILE);
 						mudlog (buf, OFF, LVL_GOD, TRUE);
-						close_socket(d);
-						return;
-					}
-					for (; !feof(old_player_fl); ) {
-						fread(&dummy, sizeof(struct char_file_u), 1, old_player_fl);
-						if (!str_cmp(dummy.name, tmp_name)) {
-							SEND_TO_Q("Nome dell'antichita', contatta i creatori per riattivarlo.\r\n", d);
-							fclose(old_player_fl);
-							STATE(d) = CON_CLOSE;
-							return;
+					} else {
+						for (; !feof(old_player_fl); ) {
+							if (fread(&dummy, sizeof(struct char_file_u), 1, old_player_fl) != 1)
+								break;
+							if (!str_cmp(dummy.name, tmp_name)) {
+								SEND_TO_Q("Nome dell'antichita', contatta i creatori per riattivarlo.\r\n", d);
+								fclose(old_player_fl);
+								STATE(d) = CON_CLOSE;
+								return;
+							}
 						}
+						fclose(old_player_fl);
 					}
-					fclose(old_player_fl);
 					
 					CREATE(d->character->player.name, char, strlen(tmp_name) + 1);
 					strcpy(d->character->player.name, CAP(tmp_name));

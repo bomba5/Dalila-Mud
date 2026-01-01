@@ -44,6 +44,7 @@ int any_mob(struct char_data *ch, room_rnum room);
 char * color_from_color (struct char_data * ch, int color);
 void wilderness_draw_type( struct char_data *ch,BOOL graphWildON );
 char *colore_esercito(struct char_data * ch, room_rnum r );
+static int wild_room_index(room_rnum room);
 
 /* EXTERN FUNCTIONS */
 int has_boat(struct char_data *ch);
@@ -225,12 +226,13 @@ void wild_index_map_load()
     if (!(db_file = fopen(buf2, "r")))
       {
       perror(buf2);
-      log("file listed in index not found");
-      exit(1);
+      sprintf(buf, "SYSERR: %s listed in wilderness map index not found (skipping)", buf2);
+      log(buf);
       }
-    else rec_count++;
-
-    fclose(db_file);
+    else {
+      rec_count++;
+      fclose(db_file);
+    }
     fscanf(index, "%s\n", buf1);
     }
 
@@ -249,7 +251,10 @@ void wild_index_map_load()
     if (!(db_file = fopen(buf2, "r")))
       {
       perror(buf2);
-      exit(1);
+      sprintf(buf, "SYSERR: %s listed in wilderness map index not found (skipping)", buf2);
+      log(buf);
+      fscanf(index, "%s\n", buf1);
+      continue;
       }
 
     // I nomi delle mappe devono essere tipo 10000.map
@@ -258,8 +263,11 @@ void wild_index_map_load()
     numero = atoi(buf1);
     if ((numero=real_zone(numero*100))==-1)
       {
-      log("Zona non esistente nell'indice delle mappe wilderness e miniwild");
-      exit(1);
+      sprintf(buf, "SYSERR: zone for wilderness map %s not found (skipping)", buf1);
+      log(buf);
+      fclose(db_file);
+      fscanf(index, "%s\n", buf1);
+      continue;
       }
     wild_map_load(db_file, numero);
     fclose(db_file);
@@ -362,12 +370,13 @@ void wild_index_special_load()
     if (!(db_file = fopen(buf2, "r")))
       {
       perror(buf2);
-      log("file listed in index not found");
-      exit(1);
+      sprintf(buf, "SYSERR: %s listed in wilderness special index not found (skipping)", buf2);
+      log(buf);
       }
-    else rec_count++;
-
-    fclose(db_file);
+    else {
+      rec_count++;
+      fclose(db_file);
+    }
     fscanf(index, "%s\n", buf1);
     }
 
@@ -386,7 +395,10 @@ void wild_index_special_load()
     if (!(db_file = fopen(buf2, "r")))
       {
       perror(buf2);
-      exit(1);
+      sprintf(buf, "SYSERR: %s listed in wilderness special index not found (skipping)", buf2);
+      log(buf);
+      fscanf(index, "%s\n", buf1);
+      continue;
       }
 
     // I nomi delle aree stanze speciali devono essere tipo 10000.wld
@@ -395,8 +407,11 @@ void wild_index_special_load()
     numero = atoi(buf1);
     if ((numero=real_zone(numero*100))==-1)
       {
-      log("Zona non esistente nell'indice delle stanza speciali (.wld) wilderness e miniwild");
-      exit(1);
+      sprintf(buf, "SYSERR: zone for wilderness special file %s not found (skipping)", buf1);
+      log(buf);
+      fclose(db_file);
+      fscanf(index, "%s\n", buf1);
+      continue;
       }
     wild_special_load(db_file, numero);
     fclose(db_file);
@@ -480,6 +495,12 @@ void wild_parse_room(FILE * fl, int virtual_nr)
     switch (*line) {
     case 'D':
       setup_dir(fl, room_nr, atoi(line + 1));
+      break;
+    case 'F':
+      if (!get_line(fl, line)) {
+        fprintf(stderr, "%s\n", buf);
+        exit(1);
+      }
       break;
     case 'E':
       CREATE(new_descr, struct extra_descr_data, 1);
@@ -1044,6 +1065,14 @@ cellConverter * MakeConversion( WORD cellCode )
 };
 
 /************************************************************************************/
+static int wild_room_index(room_rnum room)
+{
+  if (room < 0 || room > top_of_world) return -1;
+  if (world[room].wild_rnum < 0 || world[room].wild_rnum > top_of_wild_table) return -1;
+  return world[room].wild_rnum;
+}
+
+/************************************************************************************/
 void wilderness_draw( struct char_data *ch )
 {
  wilderness_draw_type( ch, FALSE );
@@ -1066,11 +1095,15 @@ void wilderness_draw_type( struct char_data *ch, BOOL graphWildON )
  int mobs;
  int miniwild = IS_IN_MINIWILD( ch ); // Vale 1 se e' miniwild, 0 se e' wilderness.
 
- char *localWildBuffer = buf; // Buffer used to save wild informations.
- WORD  bufLen = 0;                    					// For graphic client.
+ char *localWildBuffer = NULL; // Buffer used to save wild informations.
+ size_t bufLen = 0;            // For graphic client.
+ size_t bufCap = 0;
+ size_t width;
+ size_t height;
+ size_t cell_count;
+ int zone_rnum;
+ int wild_index;
  cellConverter *cellPtr;		// Used to convers cell types.
-
- strcpy( localWildBuffer, "\0" ); // Reset wild buffer.
 
  if  ( IS_NPC( ch ) )
 	  {
@@ -1085,6 +1118,25 @@ void wilderness_draw_type( struct char_data *ch, BOOL graphWildON )
 
  vch = world[ ch->in_room ].number;
  wild_coord_from_virtual( vch, &chcoord );
+ zone_rnum = world[ ch->in_room ].zone;
+
+ if ( centerx > ( MWILD_XSIZE - 1 ) / 2 ) centerx = ( MWILD_XSIZE - 1 ) / 2;
+ if ( centery > ( MWILD_YSIZE - 1 ) / 2 ) centery = ( MWILD_YSIZE - 1 ) / 2;
+
+ width = (size_t)( ( 2 * centerx ) + 1 );
+ height = (size_t)( ( 2 * centery ) + 1 );
+ cell_count = width * height;
+
+ if  ( graphWildON != FALSE )
+	  {
+		bufCap = 6 + ( cell_count * 5 );
+		if ( bufCap > 0xFFFF ) return;
+	  }
+ else
+	  bufCap = ( cell_count * 32 ) + ( height * 8 ) + 1;
+
+ CREATE( localWildBuffer, char, bufCap );
+ localWildBuffer[ 0 ] = '\0';
 
  // If graphic wild is active...
  if  ( graphWildON != FALSE )
@@ -1131,10 +1183,11 @@ void wilderness_draw_type( struct char_data *ch, BOOL graphWildON )
 					 // If graphic wild is active...
 					 if  ( graphWildON != FALSE )
 						  {
-							if  ( miniwild ) r = real_room( MINIWILD_VNUM( real_zone( vch ), x , y ) );
+							if  ( miniwild ) r = real_room( MINIWILD_VNUM( zone_rnum, x , y ) );
 							else             r = real_room( WILD_VNUM( x, y ) );
 
-							cellPtr = MakeConversion( GET_WILD_TABLE( r ).index );
+							wild_index = wild_room_index( r );
+							cellPtr = ( wild_index >= 0 ) ? MakeConversion( wild_table[ wild_index ].index ) : NULL;
 							if  ( cellPtr == NULL )
 								 {
 								  localWildBuffer[ bufLen ] = 0x01;	bufLen++;
@@ -1164,10 +1217,11 @@ void wilderness_draw_type( struct char_data *ch, BOOL graphWildON )
 					 // If graphic wild is active...
 					 if  ( graphWildON != FALSE )
 						  {
-							if  ( miniwild ) r = real_room( MINIWILD_VNUM( real_zone( vch ), x, y ) );
+							if  ( miniwild ) r = real_room( MINIWILD_VNUM( zone_rnum, x, y ) );
 							else             r = real_room( WILD_VNUM( x, y ) );
 
-							cellPtr = MakeConversion( GET_WILD_TABLE( r ).index );
+							wild_index = wild_room_index( r );
+							cellPtr = ( wild_index >= 0 ) ? MakeConversion( wild_table[ wild_index ].index ) : NULL;
 							if  ( cellPtr == NULL )
 								 {
 								  localWildBuffer[ bufLen ] = 0x01;	bufLen++;
@@ -1188,24 +1242,34 @@ void wilderness_draw_type( struct char_data *ch, BOOL graphWildON )
 //							if  ( ! miniwild && wilderness_los( ch, x, y, chcoord.x, chcoord.y ) ) // PER ORA NIENTE LOS
 							if  ( 1 )
 								 {
-								  if  ( miniwild ) r = real_room( MINIWILD_VNUM( real_zone( vch ), x, y ) );
+								  if  ( miniwild ) r = real_room( MINIWILD_VNUM( zone_rnum, x, y ) );
 								  else             r = real_room( WILD_VNUM( x, y ) );
 
-								  if  ( ROOM_FLAGGED( r, ROOM_NO_DRAW ) ) mobs = 0;
-								  else                                    mobs = any_mob( ch, r );
-
-								  switch ( mobs )
+								  wild_index = wild_room_index( r );
+								  if ( wild_index < 0 )
 									 {
-									  case 2 : c = '#'; color = 6; /*Magenta*/ break;
-									  case 1 : c = '#'; color = 2; /*Rosso*/   break;
-									  /* Eserciti. assegnamento fuffa. Poi i colori
-									   * li assegno nella funzione colore_esercito */
-									  case 3 : c = '*'; color = 1; break; // Eserciti
-									  break;
-									  default: c     = GET_WILD_TABLE( r ).symbol;
-												  color = GET_WILD_TABLE( r ).color;
-									  break;
-									 };
+									  c = ' ';
+									  color = -1;
+									  mobs = 0;
+									 }
+								  else
+									 {
+									  if  ( ROOM_FLAGGED( r, ROOM_NO_DRAW ) ) mobs = 0;
+									  else                                    mobs = any_mob( ch, r );
+
+									  switch ( mobs )
+										 {
+										  case 2 : c = '#'; color = 6; /*Magenta*/ break;
+										  case 1 : c = '#'; color = 2; /*Rosso*/   break;
+										  /* Eserciti. assegnamento fuffa. Poi i colori
+										   * li assegno nella funzione colore_esercito */
+										  case 3 : c = '*'; color = 1; break; // Eserciti
+										  break;
+										  default: c     = wild_table[ wild_index ].symbol;
+												  color = wild_table[ wild_index ].color;
+										  break;
+										 };
+									 }
 								 }
 							else
 								 {
@@ -1240,12 +1304,15 @@ void wilderness_draw_type( struct char_data *ch, BOOL graphWildON )
 
  // If graphic wild is active...
  if  ( graphWildON != FALSE ) { 
-	 localWildBuffer[ 1 ] = ( bufLen - 1 ) & 0xFF; 
-	 localWildBuffer[ 2 ] = bufLen >> 8;   
+	 WORD out_len = (WORD)bufLen;
+	 localWildBuffer[ 1 ] = ( out_len - 1 ) & 0xFF; 
+	 localWildBuffer[ 2 ] = out_len >> 8;   
 //	 send_bin_to_char( (BYTE *)localWildBuffer, bufLen, ch ); 
  }
  else
    send_to_char( localWildBuffer, ch );
+
+ if ( localWildBuffer ) free( localWildBuffer );
 };
 
 
@@ -1760,4 +1827,3 @@ struct char_data *k;
 	}
 	return "*";
 }
-

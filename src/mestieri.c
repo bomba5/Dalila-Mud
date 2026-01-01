@@ -3948,20 +3948,64 @@ void conta_wilderness (void)
 	}
 }
 
+static room_rnum pick_room_by_sector(room_rnum first, room_rnum last, int sector,
+				     const int *sector_counts, int *missing_logged)
+{
+	long attempts;
+	long max_attempts;
+	room_rnum candidate;
+
+	if (first == NOWHERE || last == NOWHERE || first > last)
+		return NOWHERE;
+	if (sector < 0 || sector >= NUM_ROOM_SECTORS)
+		return NOWHERE;
+	if (sector_counts && sector_counts[sector] <= 0) {
+		if (missing_logged && !missing_logged[sector]) {
+			sprintf(buf,
+				"Wilderness: no rooms with sector %d between %d and %d; using fallback.",
+				sector, (int)first, (int)last);
+			mudlog(buf, NRM, LVL_GOD, TRUE);
+			missing_logged[sector] = 1;
+		}
+		return NOWHERE;
+	}
+
+	max_attempts = (long)(last - first + 1) * 2;
+	if (max_attempts < 1)
+		max_attempts = 1;
+	if (max_attempts > 200000)
+		max_attempts = 200000;
+
+	for (attempts = 0; attempts < max_attempts; attempts++) {
+		candidate = number(first, last);
+		if (SECT(candidate) == sector)
+			return candidate;
+	}
+
+	if (missing_logged && !missing_logged[sector]) {
+		sprintf(buf,
+			"Wilderness: no rooms with sector %d between %d and %d; using fallback.",
+			sector, (int)first, (int)last);
+		mudlog(buf, NRM, LVL_GOD, TRUE);
+		missing_logged[sector] = 1;
+	}
+	return NOWHERE;
+}
+
 void reset_risorse(int what)
 {
 	room_rnum prima, ultima;
-	room_rnum scorri, inserito, tentativo;
+	room_rnum scorri, inserito;
 	struct obj_data * obj, * next_obj;
 	struct char_data *mob, *next_mob;
 	int nris, i, j;
 	int sector=0;
 	int ok_object;
 	long vnum;
+	int sector_counts[NUM_ROOM_SECTORS];
+	int missing_logged[NUM_ROOM_SECTORS];
 	extern struct char_data *character_list;
 	extern struct index_data *mob_index;
-	
-	conta_wilderness();
 	
 	prima =  real_room(WILD_VNUM(WILD_RXOR, WILD_RYOR));
 	ultima = real_room(WILD_VNUM(WILD_RXEN, WILD_RYEN));
@@ -3971,6 +4015,15 @@ void reset_risorse(int what)
 		mudlog("Non riesco a calcolare l'inizio o la fine della wilderness", NRM, LVL_GOD, TRUE);
 		return ;
 	}
+
+	for (i = 0; i < NUM_ROOM_SECTORS; i++) {
+		sector_counts[i] = 0;
+		missing_logged[i] = 0;
+	}
+
+	for (scorri = prima; scorri <= ultima; scorri++)
+		if (SECT(scorri) >= 0 && SECT(scorri) < NUM_ROOM_SECTORS)
+			sector_counts[SECT(scorri)]++;
 	
 	for (scorri=prima; scorri <= ultima; scorri++)
 		if (any_mob(NULL, scorri)!=2) {
@@ -4061,16 +4114,11 @@ void reset_risorse(int what)
 					GET_OBJ_VAL(obj, 1) = number (pietre_reset[i].usimin, pietre_reset[i].usimax);
 					
 					sector = trova_sector(pietre_reset + i);
-					inserito = 0;
-					while (!inserito)
-					{
-						tentativo = number(prima, ultima);
-						if (SECT(tentativo) == sector)
-						{
-							obj_to_room(obj, tentativo);
-							inserito=tentativo;
-						}
-					}
+					inserito = pick_room_by_sector(prima, ultima, sector,
+									sector_counts, missing_logged);
+					if (inserito == NOWHERE)
+						inserito = number(prima, ultima);
+					obj_to_room(obj, inserito);
 				}
 			}
 			break;
@@ -4107,16 +4155,11 @@ void reset_risorse(int what)
 					GET_OBJ_VAL(obj, 1) = number (alberi_reset[i].usimin, alberi_reset[i].usimax);
 					
 					sector = trova_sector(alberi_reset + i);
-					inserito = 0;
-					while (!inserito)
-					{
-						tentativo = number(prima, ultima);
-						if (SECT(tentativo) == sector)
-						{
-							obj_to_room(obj, tentativo);
-							inserito=tentativo;
-						}
-					}
+					inserito = pick_room_by_sector(prima, ultima, sector,
+									sector_counts, missing_logged);
+					if (inserito == NOWHERE)
+						inserito = number(prima, ultima);
+					obj_to_room(obj, inserito);
 				}
 			}
 			break;
@@ -4153,16 +4196,11 @@ void reset_risorse(int what)
 					GET_OBJ_VAL(obj, 1) = number (gemme_reset[i].usimin, gemme_reset[i].usimax);
 					
 					sector = trova_sector(gemme_reset + i);
-					inserito = 0;
-					while (!inserito)
-					{
-						tentativo = number(prima, ultima);
-						if (SECT(tentativo) == sector)
-						{
-							obj_to_room(obj, tentativo);
-							inserito=tentativo;
-						}
-					}
+					inserito = pick_room_by_sector(prima, ultima, sector,
+									sector_counts, missing_logged);
+					if (inserito == NOWHERE)
+						inserito = number(prima, ultima);
+					obj_to_room(obj, inserito);
 				}
 			}
 			break;
@@ -4199,16 +4237,11 @@ void reset_risorse(int what)
 					GET_OBJ_VAL(obj, 1) = number (rocce_reset[i].usimin, rocce_reset[i].usimax);
 					
 					sector = trova_sector(rocce_reset + i);
-					inserito = 0;
-					while (!inserito)
-					{
-						tentativo = number(prima, ultima);
-						if (SECT(tentativo) == sector)
-						{
-							obj_to_room(obj, tentativo);
-							inserito=tentativo;
-						}
-					}
+					inserito = pick_room_by_sector(prima, ultima, sector,
+									sector_counts, missing_logged);
+					if (inserito == NOWHERE)
+						inserito = number(prima, ultima);
+					obj_to_room(obj, inserito);
 				}
 			}
 			break;
@@ -4245,16 +4278,11 @@ void reset_risorse(int what)
 					GET_OBJ_VAL(obj, 1) = number (natura_reset[i].usimin, natura_reset[i].usimax);
 					
 					sector = trova_sector(natura_reset + i);
-					inserito = 0;
-					while (!inserito)
-					{
-						tentativo = number(prima, ultima);
-						if (SECT(tentativo) == sector)
-						{
-							obj_to_room(obj, tentativo);
-							inserito=tentativo;
-						}
-					}
+					inserito = pick_room_by_sector(prima, ultima, sector,
+									sector_counts, missing_logged);
+					if (inserito == NOWHERE)
+						inserito = number(prima, ultima);
+					obj_to_room(obj, inserito);
 				}
 			}
 			break;
@@ -4291,16 +4319,11 @@ void reset_risorse(int what)
 					GET_OBJ_VAL(obj, 1) = number (erbe_reset[i].usimin, erbe_reset[i].usimax);
 					
 					sector = trova_sector(erbe_reset + i);
-					inserito = 0;
-					while (!inserito)
-					{
-						tentativo = number(prima, ultima);
-						if (SECT(tentativo) == sector)
-						{
-							obj_to_room(obj, tentativo);
-							inserito=tentativo;
-						}
-					}
+					inserito = pick_room_by_sector(prima, ultima, sector,
+									sector_counts, missing_logged);
+					if (inserito == NOWHERE)
+						inserito = number(prima, ultima);
+					obj_to_room(obj, inserito);
 				}
 			}
 			
@@ -4318,17 +4341,12 @@ void reset_risorse(int what)
 				{
 					mob = read_mobile(vnum, VIRTUAL);
 					if (mob) {
-						inserito = 0;
 						sector = number(2,5);
-						while (!inserito)
-						{
-							tentativo = number(prima, ultima);
-							if (SECT(tentativo) == sector)
-							{
-								char_to_room(mob, tentativo);
-								inserito=tentativo;
-							}
-						}
+						inserito = pick_room_by_sector(prima, ultima, sector,
+										sector_counts, missing_logged);
+						if (inserito == NOWHERE)
+							inserito = number(prima, ultima);
+						char_to_room(mob, inserito);
 					} //if mob
 				}
 			}
@@ -4345,17 +4363,12 @@ void reset_risorse(int what)
 				{
 					mob = read_mobile(vnum, VIRTUAL);
 					if (mob) {
-						inserito = 0;
 						sector = number(2,5);
-						while (!inserito)
-						{
-							tentativo = number(prima, ultima);
-							if (SECT(tentativo) == sector)
-							{
-								char_to_room(mob, tentativo);
-								inserito=tentativo;
-							}
-						}
+						inserito = pick_room_by_sector(prima, ultima, sector,
+										sector_counts, missing_logged);
+						if (inserito == NOWHERE)
+							inserito = number(prima, ultima);
+						char_to_room(mob, inserito);
 					} //if mob
 				}
 			}
