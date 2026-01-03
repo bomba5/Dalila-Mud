@@ -2,3 +2,4 @@ src/*.o
 bin/circle
 lib/etc/players
 lib/etc/time_passed
+tools/__pycache__
