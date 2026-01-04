@@ -11,6 +11,10 @@ from urllib.parse import parse_qs, urlparse
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WILD_DIR = os.path.join(ROOT, "lib", "world", "wild")
 ZON_DIR = os.path.join(ROOT, "lib", "world", "zon")
+WLD_DIR = os.path.join(ROOT, "lib", "world", "wld")
+
+ROOM_INDEX = None
+ZONE_INDEX = None
 
 
 def read_text(path):
@@ -86,12 +90,41 @@ def parse_zone_file(path):
     if len(parts) < 3:
         return None
     if len(parts) == 3:
+        top = int(parts[0])
+        bottom = number * 100
         wilderness = 0
     elif len(parts) == 4:
+        top = int(parts[0])
+        bottom = number * 100
         wilderness = int(parts[3])
     else:
+        bottom = int(parts[0])
+        top = int(parts[1])
         wilderness = int(parts[4])
-    return {"number": number, "name": name, "wilderness": wilderness}
+    return {"number": number, "name": name, "wilderness": wilderness, "bottom": bottom, "top": top}
+
+
+def build_zone_index():
+    zones = []
+    for name in os.listdir(ZON_DIR):
+        if not name.endswith(".zon"):
+            continue
+        info = parse_zone_file(os.path.join(ZON_DIR, name))
+        if info:
+            info["path"] = os.path.join(ZON_DIR, name)
+            zones.append(info)
+    zones.sort(key=lambda z: z["number"])
+    return zones
+
+
+def find_zone_for_vnum(vnum):
+    global ZONE_INDEX
+    if ZONE_INDEX is None:
+        ZONE_INDEX = build_zone_index()
+    for zone in ZONE_INDEX:
+        if zone["bottom"] <= vnum <= zone["top"]:
+            return zone
+    return None
 
 
 def map_dims_for_zone(zone):
@@ -222,8 +255,8 @@ def split_wld_blocks(lines):
     return blocks
 
 
-def parse_exit_map(lines):
-    exits = {}
+def parse_exit_list(lines):
+    exits = []
     i = 0
     while i < len(lines):
         line = lines[i].strip()
@@ -235,7 +268,7 @@ def parse_exit_map(lines):
                 if len(parts) >= 3:
                     try:
                         to_vnum = int(parts[2])
-                        exits[dir_num] = to_vnum
+                        exits.append({"dir": dir_num, "to_vnum": to_vnum})
                     except ValueError:
                         pass
             i += 4
@@ -244,6 +277,398 @@ def parse_exit_map(lines):
     return exits
 
 
+def read_tilde_string(lines, idx):
+    parts = []
+    while idx < len(lines):
+        line = lines[idx]
+        if line.rstrip().endswith("~"):
+            parts.append(line.rstrip()[:-1])
+            idx += 1
+            break
+        parts.append(line)
+        idx += 1
+    return "\n".join(parts), idx
+
+
+def parse_room_block(block_lines):
+    idx = 0
+    name, idx = read_tilde_string(block_lines, idx)
+    desc, idx = read_tilde_string(block_lines, idx)
+    if idx >= len(block_lines):
+        raise ValueError("Room block missing header line.")
+    header = block_lines[idx].strip()
+    idx += 1
+    parts = header.split()
+    if len(parts) < 3:
+        raise ValueError("Invalid room header line.")
+    zone_num = int(parts[0])
+    room_flags = int(parts[1])
+    sector_type = int(parts[2])
+
+    exits = []
+    extras = []
+    other_lines = []
+    tail_lines = []
+
+    while idx < len(block_lines):
+        line = block_lines[idx].strip()
+        if line.startswith("D") and len(line) > 1 and line[1].isdigit():
+            dir_num = int(line[1])
+            idx += 1
+            keyword, idx = read_tilde_string(block_lines, idx)
+            edesc, idx = read_tilde_string(block_lines, idx)
+            if idx >= len(block_lines):
+                raise ValueError("Malformed exit block.")
+            nums = block_lines[idx].strip().split()
+            idx += 1
+            if len(nums) < 4:
+                raise ValueError("Malformed exit numbers.")
+            exit_info, key, to_room, to_room_key = map(int, nums[:4])
+            exits.append({
+                "dir": dir_num,
+                "keyword": keyword,
+                "description": edesc,
+                "exit_info": exit_info,
+                "key": key,
+                "to_room": to_room,
+                "to_room_key": to_room_key,
+            })
+            continue
+        if line == "E":
+            idx += 1
+            keyword, idx = read_tilde_string(block_lines, idx)
+            edesc, idx = read_tilde_string(block_lines, idx)
+            extras.append({"keyword": keyword, "description": edesc})
+            continue
+        if line.startswith("S"):
+            tail_lines = block_lines[idx + 1 :]
+            break
+        other_lines.append(block_lines[idx])
+        idx += 1
+
+    return {
+        "name": name,
+        "description": desc,
+        "zone": zone_num,
+        "room_flags": room_flags,
+        "sector_type": sector_type,
+        "exits": exits,
+        "extras": extras,
+        "other_lines": other_lines,
+        "tail_lines": tail_lines,
+    }
+
+
+def build_room_block(vnum, data):
+    lines = []
+    lines.append(f"#{vnum}")
+    lines.append(f"{data['name']}~")
+    lines.append(f"{data['description']}")
+    lines.append("~")
+    lines.append(f"{data['zone']} {data['room_flags']} {data['sector_type']}")
+    for ex in data["exits"]:
+        lines.append(f"D{ex['dir']}")
+        lines.append(f"{ex['keyword']}~")
+        lines.append(f"{ex['description']}~")
+        lines.append(f"{ex['exit_info']} {ex['key']} {ex['to_room']} {ex['to_room_key']}")
+    for exd in data["extras"]:
+        lines.append("E")
+        lines.append(f"{exd['keyword']}~")
+        lines.append(f"{exd['description']}~")
+    lines.extend(data["other_lines"])
+    lines.append("S")
+    lines.extend(data["tail_lines"])
+    return lines
+
+
+def build_room_index():
+    index = {}
+    for base in (WLD_DIR, os.path.join(WILD_DIR)):
+        if not os.path.isdir(base):
+            continue
+        for name in os.listdir(base):
+            if not name.endswith(".wld"):
+                continue
+            path = os.path.join(base, name)
+            lines = read_text(path).splitlines()
+            blocks = split_wld_blocks(lines)
+            for start, end in blocks:
+                vnum_line = lines[start].strip()
+                if not vnum_line.startswith("#"):
+                    continue
+                vnum = int(vnum_line[1:])
+                index[vnum] = {
+                    "path": path,
+                    "start": start,
+                    "end": end,
+                    "lines": lines,
+                }
+    return index
+
+
+def load_room_by_vnum(vnum):
+    global ROOM_INDEX
+    if ROOM_INDEX is None:
+        ROOM_INDEX = build_room_index()
+    entry = ROOM_INDEX.get(vnum)
+    if not entry:
+        return None
+    block_lines = entry["lines"][entry["start"] + 1 : entry["end"]]
+    data = parse_room_block(block_lines)
+    data["vnum"] = vnum
+    data["path"] = entry["path"]
+    return data
+
+
+def load_zone_rooms(zone_num):
+    rooms = {}
+    for base in (WLD_DIR,):
+        if not os.path.isdir(base):
+            continue
+        for name in os.listdir(base):
+            if not name.endswith(".wld"):
+                continue
+            path = os.path.join(base, name)
+            lines = read_text(path).splitlines()
+            blocks = split_wld_blocks(lines)
+            for start, end in blocks:
+                vnum_line = lines[start].strip()
+                if not vnum_line.startswith("#"):
+                    continue
+                vnum = int(vnum_line[1:])
+                block_lines = lines[start + 1 : end]
+                try:
+                    data = parse_room_block(block_lines)
+                except Exception:
+                    continue
+                if data["zone"] != zone_num:
+                    continue
+                rooms[vnum] = data
+    return rooms
+
+
+def build_zone_grid(zone_num):
+    rooms = load_zone_rooms(zone_num)
+    if not rooms:
+        return {"rooms": [], "edges": [], "min_x": 0, "min_y": 0, "max_x": 0, "max_y": 0}
+    coords = {}
+    used = set()
+
+    dir_vec = {0: (0, -1), 1: (1, 0), 2: (0, 1), 3: (-1, 0)}
+
+    def bfs(start_vnum, start_x, start_y):
+        queue = [start_vnum]
+        coords[start_vnum] = (start_x, start_y)
+        used.add(start_vnum)
+        while queue:
+            v = queue.pop(0)
+            x, y = coords[v]
+            for ex in rooms[v]["exits"]:
+                if ex["dir"] not in dir_vec:
+                    continue
+                to_room = ex["to_room"]
+                if to_room not in rooms:
+                    continue
+                dx, dy = dir_vec[ex["dir"]]
+                nx, ny = x + dx, y + dy
+                if to_room not in coords:
+                    coords[to_room] = (nx, ny)
+                    used.add(to_room)
+                    queue.append(to_room)
+
+    remaining = sorted(rooms.keys())
+    offset_x = 0
+    for vnum in remaining:
+        if vnum in coords:
+            continue
+        bfs(vnum, offset_x, 0)
+        xs = [c[0] for c in coords.values()]
+        if xs:
+            offset_x = max(xs) + 3
+
+    xs = [c[0] for c in coords.values()]
+    ys = [c[1] for c in coords.values()]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+
+    out = []
+    for vnum, (x, y) in coords.items():
+        out.append({
+            "vnum": vnum,
+            "x": x - min_x,
+            "y": y - min_y,
+            "name": rooms[vnum]["name"],
+        })
+    edges = []
+    for vnum, (x, y) in coords.items():
+        for ex in rooms[vnum]["exits"]:
+            if ex["dir"] not in dir_vec:
+                continue
+            to_room = ex["to_room"]
+            if to_room not in coords:
+                continue
+            tx, ty = coords[to_room]
+            edges.append({
+                "from_vnum": vnum,
+                "to_vnum": to_room,
+                "x1": x - min_x,
+                "y1": y - min_y,
+                "x2": tx - min_x,
+                "y2": ty - min_y,
+                "dir": ex["dir"],
+            })
+    return {"rooms": out, "edges": edges, "min_x": min_x, "min_y": min_y, "max_x": max_x, "max_y": max_y}
+
+
+def save_room_by_vnum(vnum, data):
+    global ROOM_INDEX
+    if ROOM_INDEX is None:
+        ROOM_INDEX = build_room_index()
+    entry = ROOM_INDEX.get(vnum)
+    if not entry:
+        raise ValueError("Room vnum not found in .wld files.")
+    path = entry["path"]
+    lines = entry["lines"]
+    new_block = build_room_block(vnum, data)
+    lines[entry["start"] : entry["end"]] = new_block
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    backup_path = f"{path}.bak-{timestamp}"
+    shutil.copy2(path, backup_path)
+    with open(path, "w", encoding="latin-1") as f:
+        f.write("\n".join(lines) + "\n")
+    ROOM_INDEX = None
+    return backup_path
+
+
+def list_room_spawns(vnum):
+    zone = find_zone_for_vnum(vnum)
+    if not zone:
+        return []
+    lines = read_text(zone["path"]).splitlines()
+    spawns = []
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("*"):
+            continue
+        if line.startswith(("M ", "O ")):
+            parts = line.split()
+            if len(parts) >= 5:
+                cmd = parts[0]
+                if_flag = int(parts[1])
+                arg1 = int(parts[2])
+                arg2 = int(parts[3])
+                arg3 = int(parts[4])
+                if arg3 == vnum:
+                    spawns.append({
+                        "cmd": cmd,
+                        "if_flag": if_flag,
+                        "vnum": arg1,
+                        "max": arg2,
+                    })
+    return spawns
+
+
+def add_room_spawn(vnum, cmd, obj_vnum, max_count):
+    zone = find_zone_for_vnum(vnum)
+    if not zone:
+        raise ValueError("Zone not found for vnum.")
+    lines = read_text(zone["path"]).splitlines()
+    insert_at = len(lines)
+    for i, line in enumerate(lines):
+        if line.strip() in ("S", "$"):
+            insert_at = i
+            break
+    if cmd not in ("M", "O"):
+        raise ValueError("Only M/O spawns are supported.")
+    new_line = f"{cmd} 0 {obj_vnum} {max_count} {vnum}\t(auto)"
+    lines.insert(insert_at, new_line)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    backup_path = f"{zone['path']}.bak-{timestamp}"
+    shutil.copy2(zone["path"], backup_path)
+    with open(zone["path"], "w", encoding="latin-1") as f:
+        f.write("\n".join(lines) + "\n")
+    return backup_path
+
+
+def parse_zone_resets(zone_path):
+    lines = read_text(zone_path).splitlines()
+    resets = []
+    for line in lines:
+        raw = line.rstrip("\n")
+        line = line.strip()
+        if not line or line.startswith("*") or line in ("S", "$"):
+            continue
+        parts = line.split()
+        if not parts:
+            continue
+        if len(parts[0]) != 1:
+            continue
+        cmd = parts[0]
+        if cmd not in ("M", "O", "E", "G", "P", "D", "R"):
+            continue
+        if cmd in ("M", "O", "E", "P", "D"):
+            if len(parts) >= 5:
+                resets.append({
+                    "cmd": cmd,
+                    "if_flag": int(parts[1]),
+                    "arg1": int(parts[2]),
+                    "arg2": int(parts[3]),
+                    "arg3": int(parts[4]),
+                    "raw": raw,
+                })
+        else:
+            if len(parts) >= 4:
+                resets.append({
+                    "cmd": cmd,
+                    "if_flag": int(parts[1]),
+                    "arg1": int(parts[2]),
+                    "arg2": int(parts[3]),
+                    "arg3": None,
+                    "raw": raw,
+                })
+    return resets
+
+
+def list_room_resets(vnum):
+    zone = find_zone_for_vnum(vnum)
+    if not zone:
+        return []
+    resets = parse_zone_resets(zone["path"])
+    room_resets = []
+    for r in resets:
+        if r["cmd"] in ("M", "O") and r["arg3"] == vnum:
+            room_resets.append(r)
+        elif r["cmd"] == "D" and r["arg1"] == vnum:
+            room_resets.append(r)
+        elif r["cmd"] == "R" and r["arg2"] == vnum:
+            room_resets.append(r)
+    return room_resets
+
+
+def append_zone_reset(vnum, cmd, if_flag, arg1, arg2, arg3, comment):
+    zone = find_zone_for_vnum(vnum)
+    if not zone:
+        raise ValueError("Zone not found for vnum.")
+    lines = read_text(zone["path"]).splitlines()
+    insert_at = len(lines)
+    for i, line in enumerate(lines):
+        if line.strip() in ("S", "$"):
+            insert_at = i
+            break
+    cmd = cmd.upper()
+    if cmd in ("M", "O", "E", "P", "D"):
+        line = f"{cmd} {if_flag} {arg1} {arg2} {arg3}"
+    else:
+        line = f"{cmd} {if_flag} {arg1} {arg2}"
+    if comment:
+        line = f"{line}\t({comment})"
+    lines.insert(insert_at, line)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    backup_path = f"{zone['path']}.bak-{timestamp}"
+    shutil.copy2(zone["path"], backup_path)
+    with open(zone["path"], "w", encoding="latin-1") as f:
+        f.write("\n".join(lines) + "\n")
+    return backup_path
 def load_zone_exits(zone):
     wld_path = os.path.join(WILD_DIR, f"{zone}.wld")
     if not os.path.exists(wld_path):
@@ -257,13 +682,13 @@ def load_zone_exits(zone):
             continue
         vnum = int(vnum_line[1:])
         block_lines = lines[start + 1 : end]
-        exits = parse_exit_map(block_lines)
+        exits = parse_exit_list(block_lines)
         if exits:
-            exit_map[vnum] = {str(k): v for k, v in exits.items()}
+            exit_map[vnum] = exits
     return exit_map
 
 
-def update_wld_exit(zone, vnum, dir_num, to_vnum):
+def update_wld_exit(zone, vnum, dir_num, to_vnum, match_to_vnum=None):
     wld_path = os.path.join(WILD_DIR, f"{zone}.wld")
     lines = []
     has_dollar = False
@@ -335,10 +760,18 @@ def update_wld_exit(zone, vnum, dir_num, to_vnum):
                 if int(line[1]) == dir_num:
                     if i + 3 >= len(block_lines):
                         raise ValueError("Malformed exit block.")
+                    current_to = None
+                    parts = block_lines[i + 3].strip().split()
+                    if len(parts) >= 3:
+                        try:
+                            current_to = int(parts[2])
+                        except ValueError:
+                            current_to = None
                     if to_vnum is None:
                         # remove 4-line block
-                        del block_lines[i:i+4]
-                        replaced = True
+                        if match_to_vnum is None or current_to == match_to_vnum:
+                            del block_lines[i:i+4]
+                            replaced = True
                     else:
                         block_lines[i + 3] = f"0 0 {to_vnum} 0"
                         replaced = True
@@ -373,6 +806,32 @@ def update_wld_exit(zone, vnum, dir_num, to_vnum):
     with open(wld_path, "w", encoding="latin-1") as f:
         f.write("\n".join(lines) + "\n")
     return backup_path
+
+HOME_HTML = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>World Editor</title>
+  <style>
+    body { margin: 0; font-family: monospace; background: #101417; color: #e6e6e6; }
+    main { max-width: 700px; margin: 80px auto; padding: 20px; }
+    .btn { background: #1b2230; color: #e6e6e6; border: 1px solid #2a2f35; padding: 10px 14px; cursor: pointer; display: inline-block; margin-right: 10px; text-decoration: none; }
+    .meta { font-size: 12px; opacity: 0.8; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h2>World Editor</h2>
+    <div>
+      <a class="btn" href="/wild">Edit Wild/Miniwild</a>
+      <a class="btn" href="/room">Edit Room</a>
+    </div>
+    <div class="meta">Use the room editor for non‑wild zones and zone maps.</div>
+  </main>
+</body>
+</html>
+"""
 
 HTML = """<!doctype html>
 <html lang="en">
@@ -497,10 +956,12 @@ const ctx = canvas.getContext('2d');
 function setStatus(msg) { statusEl.textContent = msg; }
 
 function fetchJson(url, opts) {
-  return fetch(url, opts).then(r => {
-    if (!r.ok) throw new Error(r.statusText);
-    return r.json();
-  });
+  return fetch(url, opts).then(r =>
+    r.json().then(data => {
+      if (!r.ok) throw new Error(data.error || r.statusText);
+      return data;
+    })
+  );
 }
 
 function renderPalette() {
@@ -751,9 +1212,9 @@ async function loadExitList() {
       const title = document.createElement('div');
       title.textContent = `Cell ${vnum}`;
       row.appendChild(title);
-      const dirs = Object.keys(exits).sort((a,b)=>parseInt(a)-parseInt(b));
-      for (const dir of dirs) {
-        const toVnum = exits[dir];
+      for (const ex of exits) {
+        const dir = ex.dir;
+        const toVnum = ex.to_vnum;
         const btn = document.createElement('button');
         btn.className = 'btn';
         btn.style.margin = '2px';
@@ -766,6 +1227,27 @@ async function loadExitList() {
           scrollToCell({x: pos.x, y: pos.y});
         });
         row.appendChild(btn);
+        const link = document.createElement('a');
+        link.href = `/room?vnum=${toVnum}`;
+        link.target = '_blank';
+        link.textContent = 'open';
+        link.style.marginLeft = '6px';
+        row.appendChild(link);
+        const rm = document.createElement('button');
+        rm.className = 'btn';
+        rm.style.marginLeft = '6px';
+        rm.textContent = 'remove';
+        rm.addEventListener('click', () => {
+          fetchJson(`/api/exit?zone=${state.zone}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({vnum: parseInt(vnum, 10), dir: dir, match_to_vnum: toVnum})
+          }).then(res => {
+            setStatus(res.message || 'Exit removed.');
+            loadExitList();
+          }).catch(e => setStatus(`Exit remove failed: ${e.message}`));
+        });
+        row.appendChild(rm);
       }
       exitList.appendChild(row);
     }
@@ -790,6 +1272,9 @@ async function setExit(remove) {
     const tgt = parseInt(exitTarget.value, 10);
     if (!tgt) { setStatus('Set a target vnum first.'); return; }
     payload.to_vnum = tgt;
+  } else {
+    const tgt = parseInt(exitTarget.value, 10);
+    if (tgt) payload.match_to_vnum = tgt;
   }
   try {
     const res = await fetchJson(`/api/exit?zone=${state.zone}`, {
@@ -824,9 +1309,628 @@ async function init() {
     zoneSelect.appendChild(opt);
   }
   paletteMeta.textContent = `Palette (${palette.length})`;
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('vnum')) {
+    const vnum = parseInt(params.get('vnum'), 10);
+    // Find zone that matches vnum by asking server
+    try {
+      const room = await fetchJson(`/api/room?vnum=${vnum}`);
+      if (room.zone) {
+        zoneSelect.value = room.zone;
+        loadBtn.click();
+        // selection will be updated after load via query mode click;
+        // we directly select here when grid is ready.
+        setTimeout(() => {
+          const pos = vnumToCell(vnum);
+          if (pos) {
+            setSelectedCell({x: pos.x, y: pos.y});
+            scrollToCell({x: pos.x, y: pos.y});
+          }
+        }, 300);
+      }
+    } catch (e) {
+      setStatus(`Init vnum failed: ${e.message}`);
+    }
+  }
 }
 
 init().catch(e => setStatus(`Init failed: ${e.message}`));
+</script>
+</body>
+</html>
+"""
+
+ROOM_HTML = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Room Editor</title>
+  <style>
+    body { margin: 0; font-family: monospace; background: #101417; color: #e6e6e6; }
+    header { padding: 10px 14px; border-bottom: 1px solid #2a2f35; display: flex; gap: 12px; align-items: center; }
+    main { padding: 12px 14px; }
+    .row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .btn { background: #1b2230; color: #e6e6e6; border: 1px solid #2a2f35; padding: 6px 10px; cursor: pointer; }
+    input, textarea, select { background: #0f141a; color: #e6e6e6; border: 1px solid #2a2f35; padding: 4px; }
+    textarea { width: 100%; height: 160px; }
+    .box { border: 1px solid #2a2f35; padding: 8px; margin-bottom: 12px; }
+    .meta { font-size: 12px; opacity: 0.8; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #2a2f35; padding: 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <label>Room VNUM</label>
+      <input id="vnumInput" type="number" style="width:120px">
+      <button id="loadBtn" class="btn">Load</button>
+      <button id="openMapBtn" class="btn">Open Map</button>
+    </div>
+    <div class="meta" id="status">Idle</div>
+    <button id="saveBtn" class="btn">Save</button>
+  </header>
+  <main>
+    <div class="box">
+      <div class="row">
+        <label>Name</label>
+        <input id="nameInput" type="text" style="flex:1">
+      </div>
+      <div class="row">
+        <label>Room Flags</label>
+        <input id="flagsInput" type="number" style="width:120px">
+        <label>Sector</label>
+        <input id="sectorInput" type="number" style="width:120px">
+        <label>Zone</label>
+        <input id="zoneInput" type="number" style="width:120px" disabled>
+      </div>
+      <div class="row">
+        <label>Description</label>
+      </div>
+      <textarea id="descInput"></textarea>
+    </div>
+
+    <div class="box">
+      <div class="row">
+        <div class="meta">Exits</div>
+        <button id="addExitBtn" class="btn">Add Exit</button>
+      </div>
+      <table id="exitsTable">
+        <thead>
+          <tr><th>Dir</th><th>To VNUM</th><th>Exit Info</th><th>Key</th><th>To Room Key</th><th>Actions</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="box">
+      <div class="row">
+        <div class="meta">Room Spawns (M/O)</div>
+      </div>
+      <table id="spawnsTable">
+        <thead>
+          <tr><th>Cmd</th><th>VNUM</th><th>Max</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="row">
+        <select id="spawnCmd">
+          <option value="M">Mob (M)</option>
+          <option value="O">Object (O)</option>
+        </select>
+        <input id="spawnVnum" type="number" placeholder="VNUM" style="width:120px">
+        <input id="spawnMax" type="number" placeholder="Max" value="1" style="width:80px">
+        <button id="spawnAdd" class="btn">Add Spawn</button>
+      </div>
+      <div class="meta">Spawns are appended to the zone file. Backup is created on save.</div>
+    </div>
+
+    <div class="box">
+      <div class="row">
+        <div class="meta">Zone Reset Commands</div>
+      </div>
+      <table id="resetsTable">
+        <thead>
+          <tr><th>Cmd</th><th>if</th><th>arg1</th><th>arg2</th><th>arg3</th><th>raw</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="row">
+        <select id="resetCmd">
+          <option value="M">M</option>
+          <option value="O">O</option>
+          <option value="E">E</option>
+          <option value="G">G</option>
+          <option value="P">P</option>
+          <option value="D">D</option>
+          <option value="R">R</option>
+        </select>
+        <input id="resetIf" type="number" placeholder="if" value="0" style="width:60px">
+        <input id="resetA1" type="number" placeholder="arg1" style="width:90px">
+        <input id="resetA2" type="number" placeholder="arg2" style="width:90px">
+        <input id="resetA3" type="number" placeholder="arg3" style="width:90px">
+        <input id="resetComment" type="text" placeholder="comment" style="width:180px">
+        <button id="resetAdd" class="btn">Append Reset</button>
+      </div>
+      <div class="meta">
+        For M/O/D/R, set args to target this room (M/O: arg3=room vnum; D: arg1=room vnum; R: arg2=room vnum).
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="row">
+        <div class="meta">Zone Map (non‑wild)</div>
+        <label>Zoom</label>
+        <input id="zoneZoom" type="number" min="10" max="60" value="20" style="width:60px">
+      </div>
+      <canvas id="zoneCanvas"></canvas>
+      <div class="meta">Click a room to open it.</div>
+    </div>
+  </main>
+<script>
+const statusEl = document.getElementById('status');
+const vnumInput = document.getElementById('vnumInput');
+const loadBtn = document.getElementById('loadBtn');
+const openMapBtn = document.getElementById('openMapBtn');
+const zoneCanvas = document.getElementById('zoneCanvas');
+const zoneZoom = document.getElementById('zoneZoom');
+const zctx = zoneCanvas.getContext('2d');
+let zoneIndex = [];
+const saveBtn = document.getElementById('saveBtn');
+const nameInput = document.getElementById('nameInput');
+const descInput = document.getElementById('descInput');
+const flagsInput = document.getElementById('flagsInput');
+const sectorInput = document.getElementById('sectorInput');
+const zoneInput = document.getElementById('zoneInput');
+const exitsTable = document.getElementById('exitsTable').querySelector('tbody');
+const spawnsTable = document.getElementById('spawnsTable').querySelector('tbody');
+const spawnCmd = document.getElementById('spawnCmd');
+const spawnVnum = document.getElementById('spawnVnum');
+const spawnMax = document.getElementById('spawnMax');
+const spawnAdd = document.getElementById('spawnAdd');
+const resetsTable = document.getElementById('resetsTable').querySelector('tbody');
+const resetCmd = document.getElementById('resetCmd');
+const resetIf = document.getElementById('resetIf');
+const resetA1 = document.getElementById('resetA1');
+const resetA2 = document.getElementById('resetA2');
+const resetA3 = document.getElementById('resetA3');
+const resetComment = document.getElementById('resetComment');
+const resetAdd = document.getElementById('resetAdd');
+
+let roomData = null;
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+function fetchJson(url, opts) {
+  return fetch(url, opts).then(r =>
+    r.json().then(data => {
+      if (!r.ok) throw new Error(data.error || r.statusText);
+      return data;
+    })
+  );
+}
+
+function renderExits() {
+  exitsTable.innerHTML = '';
+  if (!roomData) return;
+  const dirNames = {0:'N',1:'E',2:'S',3:'W',4:'U',5:'D'};
+  for (const ex of roomData.exits) {
+    const tr = document.createElement('tr');
+    const dir = document.createElement('td');
+    dir.textContent = dirNames[ex.dir] ?? ex.dir;
+    const to = document.createElement('td');
+    const toInput = document.createElement('input');
+    toInput.type = 'number';
+    toInput.value = ex.to_room;
+    to.appendChild(toInput);
+    const info = document.createElement('td');
+    const infoInput = document.createElement('input');
+    infoInput.type = 'number';
+    infoInput.value = ex.exit_info;
+    info.appendChild(infoInput);
+    const key = document.createElement('td');
+    const keyInput = document.createElement('input');
+    keyInput.type = 'number';
+    keyInput.value = ex.key;
+    key.appendChild(keyInput);
+    const trk = document.createElement('td');
+    const trkInput = document.createElement('input');
+    trkInput.type = 'number';
+    trkInput.value = ex.to_room_key;
+    trk.appendChild(trkInput);
+    const actions = document.createElement('td');
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn';
+    delBtn.textContent = 'Remove';
+    delBtn.addEventListener('click', () => {
+      roomData.exits = roomData.exits.filter(e => e !== ex);
+      renderExits();
+    });
+    actions.appendChild(delBtn);
+    tr.appendChild(dir);
+    tr.appendChild(to);
+    tr.appendChild(info);
+    tr.appendChild(key);
+    tr.appendChild(trk);
+    tr.appendChild(actions);
+    exitsTable.appendChild(tr);
+    ex._inputs = {toInput, infoInput, keyInput, trkInput};
+  }
+}
+
+function renderZoneMap(data, currentVnum, neighborSet) {
+  const size = parseInt(zoneZoom.value, 10) || 20;
+  const rooms = data.rooms || [];
+  const edges = data.edges || [];
+  if (!rooms.length) {
+    zoneCanvas.width = 0;
+    zoneCanvas.height = 0;
+    zoneIndex = [];
+    return;
+  }
+  const maxX = Math.max(...rooms.map(r => r.x));
+  const maxY = Math.max(...rooms.map(r => r.y));
+  zoneCanvas.width = (maxX + 1) * size;
+  zoneCanvas.height = (maxY + 1) * size;
+  zctx.fillStyle = '#0c0f12';
+  zctx.fillRect(0, 0, zoneCanvas.width, zoneCanvas.height);
+  zctx.strokeStyle = '#3a4a5a';
+  zctx.lineWidth = 2;
+  const dirNames = {0:'N',1:'E',2:'S',3:'W'};
+  for (const e of edges) {
+    const x1 = e.x1 * size + size / 2;
+    const y1 = e.y1 * size + size / 2;
+    const x2 = e.x2 * size + size / 2;
+    const y2 = e.y2 * size + size / 2;
+    zctx.beginPath();
+    zctx.moveTo(x1, y1);
+    zctx.lineTo(x2, y2);
+    zctx.stroke();
+    const lx = (x1 + x2) / 2;
+    const ly = (y1 + y2) / 2;
+    zctx.fillStyle = '#e6e6e6';
+    zctx.font = '10px monospace';
+    zctx.textAlign = 'center';
+    zctx.textBaseline = 'middle';
+    zctx.fillText(dirNames[e.dir] || e.dir, lx, ly - 6);
+  }
+  zoneIndex = rooms;
+  for (const r of rooms) {
+    const x = r.x * size;
+    const y = r.y * size;
+    if (currentVnum && r.vnum === currentVnum) {
+      zctx.fillStyle = '#1f6b3a';
+    } else if (neighborSet && neighborSet.has(r.vnum)) {
+      zctx.fillStyle = '#6b6a1f';
+    } else {
+      zctx.fillStyle = '#1f3b5a';
+    }
+    zctx.fillRect(x + 2, y + 2, size - 4, size - 4);
+    zctx.fillStyle = '#e6e6e6';
+    zctx.font = '10px monospace';
+    zctx.textAlign = 'center';
+    zctx.textBaseline = 'middle';
+    zctx.fillText(r.vnum, x + size / 2, y + size / 2);
+  }
+}
+
+function renderSpawns() {
+  spawnsTable.innerHTML = '';
+  if (!roomData) return;
+  for (const s of roomData.spawns) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.cmd}</td><td>${s.vnum}</td><td>${s.max}</td>`;
+    spawnsTable.appendChild(tr);
+  }
+}
+
+function renderResets() {
+  resetsTable.innerHTML = '';
+  if (!roomData) return;
+  for (const r of roomData.resets) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.cmd}</td><td>${r.if_flag}</td><td>${r.arg1}</td><td>${r.arg2}</td><td>${r.arg3 ?? ''}</td><td>${r.raw}</td>`;
+    resetsTable.appendChild(tr);
+  }
+}
+
+function syncExitInputs() {
+  for (const ex of roomData.exits) {
+    ex.to_room = parseInt(ex._inputs.toInput.value, 10) || 0;
+    ex.exit_info = parseInt(ex._inputs.infoInput.value, 10) || 0;
+    ex.key = parseInt(ex._inputs.keyInput.value, 10) || 0;
+    ex.to_room_key = parseInt(ex._inputs.trkInput.value, 10) || 0;
+  }
+}
+
+async function loadRoom() {
+  const vnum = parseInt(vnumInput.value, 10);
+  if (!vnum) return;
+  setStatus('Loading...');
+  try {
+    const data = await fetchJson(`/api/room?vnum=${vnum}`);
+    roomData = data;
+    nameInput.value = data.name;
+    descInput.value = data.description;
+    flagsInput.value = data.room_flags;
+    sectorInput.value = data.sector_type;
+    zoneInput.value = data.zone;
+    renderExits();
+    renderSpawns();
+    renderResets();
+    const ro = !!data.readonly;
+    saveBtn.disabled = ro;
+    nameInput.disabled = ro;
+    descInput.disabled = ro;
+    flagsInput.disabled = ro;
+    sectorInput.disabled = ro;
+    document.getElementById('addExitBtn').disabled = ro;
+    spawnAdd.disabled = ro;
+    openMapBtn.disabled = !(data.zone_wilderness === 1 || data.zone_wilderness === 2);
+    if (data.zone_wilderness === 0) {
+      const z = await fetchJson(`/api/zone_map?zone=${data.zone}`);
+      const neighbors = new Set();
+      for (const ex of data.exits || []) {
+        if (ex.to_room) neighbors.add(ex.to_room);
+      }
+      renderZoneMap(z, data.vnum, neighbors);
+    } else {
+      renderZoneMap({rooms: [], edges: []});
+    }
+    setStatus(`Loaded ${data.vnum} (${data.zone_name || 'zone'})`);
+  } catch (e) {
+    setStatus(`Load failed: ${e.message}`);
+  }
+}
+
+async function saveRoom() {
+  if (!roomData) return;
+  syncExitInputs();
+  roomData.name = nameInput.value;
+  roomData.description = descInput.value;
+  roomData.room_flags = parseInt(flagsInput.value, 10) || 0;
+  roomData.sector_type = parseInt(sectorInput.value, 10) || 0;
+  setStatus('Saving...');
+  try {
+    const res = await fetchJson(`/api/room?vnum=${roomData.vnum}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(roomData)
+    });
+    setStatus(res.message || 'Saved.');
+  } catch (e) {
+    setStatus(`Save failed: ${e.message}`);
+  }
+}
+
+loadBtn.addEventListener('click', loadRoom);
+saveBtn.addEventListener('click', saveRoom);
+openMapBtn.addEventListener('click', () => {
+  if (!roomData) return;
+  window.open(`/wild?vnum=${roomData.vnum}`, '_blank');
+});
+zoneCanvas.addEventListener('click', (evt) => {
+  const rect = zoneCanvas.getBoundingClientRect();
+  const size = parseInt(zoneZoom.value, 10) || 20;
+  const x = Math.floor((evt.clientX - rect.left) / size);
+  const y = Math.floor((evt.clientY - rect.top) / size);
+  const room = zoneIndex.find(r => r.x === x && r.y === y);
+  if (room) {
+    vnumInput.value = room.vnum;
+    loadRoom();
+  }
+});
+
+zoneZoom.addEventListener('change', () => {
+  if (roomData && roomData.zone_wilderness === 0) {
+    fetchJson(`/api/zone_map?zone=${roomData.zone}`).then(z => {
+      const neighbors = new Set();
+      for (const ex of roomData.exits || []) {
+        if (ex.to_room) neighbors.add(ex.to_room);
+      }
+      renderZoneMap(z, roomData.vnum, neighbors);
+    });
+  }
+});
+
+document.getElementById('addExitBtn').addEventListener('click', () => {
+  if (!roomData) return;
+  roomData.exits.push({
+    dir: 0, keyword: '', description: '',
+    exit_info: 0, key: 0, to_room: 0, to_room_key: 0
+  });
+  renderExits();
+});
+
+spawnAdd.addEventListener('click', async () => {
+  if (!roomData) return;
+  const cmd = spawnCmd.value;
+  const vnum = parseInt(spawnVnum.value, 10);
+  const max = parseInt(spawnMax.value, 10) || 1;
+  if (!vnum) { setStatus('Spawn VNUM required.'); return; }
+  setStatus('Adding spawn...');
+  try {
+    const res = await fetchJson(`/api/spawn?vnum=${roomData.vnum}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd, vnum, max})
+    });
+    setStatus(res.message || 'Spawn added.');
+    const data = await fetchJson(`/api/room?vnum=${roomData.vnum}`);
+    roomData = data;
+    renderSpawns();
+    renderResets();
+  } catch (e) {
+    setStatus(`Spawn add failed: ${e.message}`);
+  }
+});
+
+resetAdd.addEventListener('click', async () => {
+  if (!roomData) return;
+  const cmd = resetCmd.value;
+  const ifFlag = parseInt(resetIf.value, 10) || 0;
+  const a1 = parseInt(resetA1.value, 10) || 0;
+  const a2 = parseInt(resetA2.value, 10) || 0;
+  const a3 = parseInt(resetA3.value, 10) || 0;
+  const comment = resetComment.value || '';
+  setStatus('Appending reset...');
+  try {
+    const res = await fetchJson(`/api/reset?vnum=${roomData.vnum}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd, if_flag: ifFlag, arg1: a1, arg2: a2, arg3: a3, comment})
+    });
+    setStatus(res.message || 'Reset appended.');
+    const data = await fetchJson(`/api/room?vnum=${roomData.vnum}`);
+    roomData = data;
+    renderResets();
+  } catch (e) {
+    setStatus(`Reset append failed: ${e.message}`);
+  }
+});
+
+// Init from query param
+const params = new URLSearchParams(window.location.search);
+if (params.get('vnum')) {
+  vnumInput.value = params.get('vnum');
+  loadRoom();
+}
+</script>
+</body>
+</html>
+"""
+
+ZONE_HTML = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zone Map</title>
+  <style>
+    body { margin: 0; font-family: monospace; background: #101417; color: #e6e6e6; }
+    header { padding: 10px 14px; border-bottom: 1px solid #2a2f35; display: flex; gap: 12px; align-items: center; }
+    main { height: calc(100vh - 48px); overflow: auto; }
+    .btn { background: #1b2230; color: #e6e6e6; border: 1px solid #2a2f35; padding: 6px 10px; cursor: pointer; }
+    input { background: #0f141a; color: #e6e6e6; border: 1px solid #2a2f35; padding: 4px; }
+    canvas { image-rendering: pixelated; background: #0c0f12; }
+    .meta { font-size: 12px; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <header>
+    <label>Zone</label>
+    <input id="zoneInput" type="number" style="width:120px">
+    <button id="loadBtn" class="btn">Load</button>
+    <label>Zoom</label>
+    <input id="cellSize" type="number" min="8" max="60" value="20" style="width:60px">
+    <div class="meta" id="status">Idle</div>
+  </header>
+  <main>
+    <canvas id="zoneCanvas"></canvas>
+  </main>
+<script>
+const zoneInput = document.getElementById('zoneInput');
+const loadBtn = document.getElementById('loadBtn');
+const cellSize = document.getElementById('cellSize');
+const statusEl = document.getElementById('status');
+const canvas = document.getElementById('zoneCanvas');
+const ctx = canvas.getContext('2d');
+let roomIndex = [];
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+function fetchJson(url, opts) {
+  return fetch(url, opts).then(r =>
+    r.json().then(data => {
+      if (!r.ok) throw new Error(data.error || r.statusText);
+      return data;
+    })
+  );
+}
+
+function drawGrid(data) {
+  const size = parseInt(cellSize.value, 10) || 20;
+  const rooms = data.rooms || [];
+  const edges = data.edges || [];
+  if (!rooms.length) {
+    setStatus('No rooms found.');
+    return;
+  }
+  const maxX = Math.max(...rooms.map(r => r.x));
+  const maxY = Math.max(...rooms.map(r => r.y));
+  canvas.width = (maxX + 1) * size;
+  canvas.height = (maxY + 1) * size;
+  ctx.fillStyle = '#0c0f12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  roomIndex = rooms;
+  ctx.strokeStyle = '#3a4a5a';
+  ctx.lineWidth = 2;
+  const dirNames = {0:'N',1:'E',2:'S',3:'W'};
+  for (const e of edges) {
+    const x1 = e.x1 * size + size / 2;
+    const y1 = e.y1 * size + size / 2;
+    const x2 = e.x2 * size + size / 2;
+    const y2 = e.y2 * size + size / 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    const lx = (x1 + x2) / 2;
+    const ly = (y1 + y2) / 2;
+    ctx.fillStyle = '#e6e6e6';
+    ctx.font = `${Math.max(8, size * 0.4)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(dirNames[e.dir] || e.dir, lx, ly - 6);
+  }
+  for (const r of rooms) {
+    const x = r.x * size;
+    const y = r.y * size;
+    ctx.fillStyle = '#1f3b5a';
+    ctx.fillRect(x, y, size - 1, size - 1);
+    ctx.fillStyle = '#e6e6e6';
+    ctx.font = `${Math.max(8, size * 0.4)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.vnum, x + size / 2, y + size / 2);
+  }
+}
+
+loadBtn.addEventListener('click', async () => {
+  const zone = parseInt(zoneInput.value, 10);
+  if (!zone) return;
+  setStatus('Loading...');
+  try {
+    const data = await fetchJson(`/api/zone_map?zone=${zone}`);
+    drawGrid(data);
+    setStatus(`Loaded zone ${zone}`);
+  } catch (e) {
+    setStatus(`Load failed: ${e.message}`);
+  }
+});
+
+cellSize.addEventListener('change', () => {
+  loadBtn.click();
+});
+
+canvas.addEventListener('click', (evt) => {
+  const rect = canvas.getBoundingClientRect();
+  const size = parseInt(cellSize.value, 10) || 20;
+  const x = Math.floor((evt.clientX - rect.left) / size);
+  const y = Math.floor((evt.clientY - rect.top) / size);
+  const room = roomIndex.find(r => r.x === x && r.y === y);
+  if (room) {
+    window.open(`/room?vnum=${room.vnum}`, '_blank');
+  }
+});
+
+const params = new URLSearchParams(window.location.search);
+if (params.get('zone')) {
+  zoneInput.value = params.get('zone');
+  loadBtn.click();
+}
 </script>
 </body>
 </html>
@@ -848,7 +1952,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/":
+            self._send(200, HOME_HTML.encode("utf-8"))
+            return
+        if parsed.path == "/wild":
             self._send(200, HTML.encode("utf-8"))
+            return
+        if parsed.path == "/room":
+            self._send(200, ROOM_HTML.encode("utf-8"))
+            return
+        if parsed.path == "/zone":
+            self._send(200, ZONE_HTML.encode("utf-8"))
             return
         if parsed.path == "/api/palette":
             self._send_json(200, parse_wild_table())
@@ -885,6 +1998,55 @@ class Handler(BaseHTTPRequestHandler):
                 "grid": grid,
             })
             return
+        if parsed.path == "/api/room":
+            qs = parse_qs(parsed.query)
+            vnum = int(qs.get("vnum", [0])[0])
+            try:
+                room = load_room_by_vnum(vnum)
+                if not room:
+                    # fallback: check if this is wild/miniwild and compute from map
+                    zone = find_zone_for_vnum(vnum)
+                    if not zone or zone["wilderness"] not in (1, 2):
+                        raise ValueError("Room not found.")
+                    info, width, height, xoff, yoff, grid = read_map_ids(zone["number"])
+                    if zone["wilderness"] == 1:
+                        vy = (vnum - 1000000) // 1000
+                        vx = (vnum - 1000000) % 1000
+                    else:
+                        vy = (vnum - (zone["number"] * 100)) // 100
+                        vx = (vnum - (zone["number"] * 100)) % 100
+                    gx = vx - xoff
+                    gy = vy - yoff
+                    if not (0 <= gx < width and 0 <= gy < height):
+                        raise ValueError("Room not found.")
+                    wild_id = grid[gy][gx]
+                    wild_table = parse_wild_table_full()
+                    meta = wild_table.get(wild_id, {})
+                    room = {
+                        "vnum": vnum,
+                        "name": meta.get("name", "Unknown"),
+                        "description": meta.get("description", ""),
+                        "room_flags": meta.get("room_flags", 0),
+                        "sector_type": meta.get("sector_type", 0),
+                        "zone": zone["number"],
+                        "zone_name": zone["name"],
+                        "zone_wilderness": zone["wilderness"],
+                        "exits": [],
+                        "extras": [],
+                        "spawns": list_room_spawns(vnum),
+                        "resets": list_room_resets(vnum),
+                        "readonly": True,
+                    }
+                else:
+                    zone = find_zone_for_vnum(vnum)
+                    room["zone_name"] = zone["name"] if zone else ""
+                    room["zone_wilderness"] = zone["wilderness"] if zone else 0
+                    room["spawns"] = list_room_spawns(vnum)
+                    room["resets"] = list_room_resets(vnum)
+                self._send_json(200, room)
+            except Exception as e:
+                self._send_json(400, {"error": str(e)})
+            return
         if parsed.path == "/api/exits":
             qs = parse_qs(parsed.query)
             zone = int(qs.get("zone", [0])[0])
@@ -894,6 +2056,21 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": str(e)})
                 return
             self._send_json(200, {"zone": zone, "exits": exits})
+            return
+        if parsed.path == "/api/zone_map":
+            qs = parse_qs(parsed.query)
+            zone = int(qs.get("zone", [0])[0])
+            try:
+                info = parse_zone_file(os.path.join(ZON_DIR, f"{zone}.zon"))
+                if not info:
+                    raise ValueError("Zone not found.")
+                if info["wilderness"] != 0:
+                    raise ValueError("Zone map view is for non-wild zones only.")
+                grid = build_zone_grid(zone)
+            except Exception as e:
+                self._send_json(400, {"error": str(e)})
+                return
+            self._send_json(200, grid)
             return
         self._send(404, b"not found", "text/plain; charset=utf-8")
 
@@ -916,6 +2093,9 @@ class Handler(BaseHTTPRequestHandler):
                     to_vnum = payload.get("to_vnum", None)
                     if to_vnum is not None:
                         to_vnum = int(to_vnum)
+                    match_to = payload.get("match_to_vnum", None)
+                    if match_to is not None:
+                        match_to = int(match_to)
                 except Exception:
                     self._send_json(400, {"error": "Invalid vnum/dir/to_vnum"})
                     return
@@ -923,7 +2103,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json(400, {"error": "dir must be 0..5"})
                     return
                 try:
-                    backup = update_wld_exit(zone, vnum, dir_num, to_vnum)
+                    backup = update_wld_exit(zone, vnum, dir_num, to_vnum, match_to_vnum=match_to)
                 except Exception as e:
                     self._send_json(400, {"error": str(e)})
                     return
@@ -931,6 +2111,86 @@ class Handler(BaseHTTPRequestHandler):
                 if backup:
                     msg += f" Backup: {os.path.basename(backup)}"
                 self._send_json(200, {"ok": True, "message": msg})
+                return
+            if parsed.path == "/api/room":
+                qs = parse_qs(parsed.query)
+                vnum = int(qs.get("vnum", [0])[0])
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                try:
+                    payload = json.loads(raw.decode("utf-8"))
+                except Exception as e:
+                    self._send_json(400, {"error": f"Invalid JSON: {e}"})
+                    return
+                try:
+                    room = load_room_by_vnum(vnum)
+                    if not room:
+                        raise ValueError("Room not found in editable .wld files.")
+                    room["name"] = payload.get("name", room["name"])
+                    room["description"] = payload.get("description", room["description"])
+                    room["room_flags"] = int(payload.get("room_flags", room["room_flags"]))
+                    room["sector_type"] = int(payload.get("sector_type", room["sector_type"]))
+                    exits = payload.get("exits", [])
+                    new_exits = []
+                    for ex in exits:
+                        new_exits.append({
+                            "dir": int(ex.get("dir", 0)),
+                            "keyword": ex.get("keyword", ""),
+                            "description": ex.get("description", ""),
+                            "exit_info": int(ex.get("exit_info", 0)),
+                            "key": int(ex.get("key", 0)),
+                            "to_room": int(ex.get("to_room", 0)),
+                            "to_room_key": int(ex.get("to_room_key", 0)),
+                        })
+                    room["exits"] = new_exits
+                    backup = save_room_by_vnum(vnum, room)
+                except Exception as e:
+                    self._send_json(400, {"error": str(e)})
+                    return
+                self._send_json(200, {"ok": True, "message": f"Room saved. Backup: {os.path.basename(backup)}"})
+                return
+            if parsed.path == "/api/spawn":
+                qs = parse_qs(parsed.query)
+                vnum = int(qs.get("vnum", [0])[0])
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                try:
+                    payload = json.loads(raw.decode("utf-8"))
+                except Exception as e:
+                    self._send_json(400, {"error": f"Invalid JSON: {e}"})
+                    return
+                cmd = payload.get("cmd", "")
+                obj_vnum = int(payload.get("vnum", 0))
+                max_count = int(payload.get("max", 1))
+                try:
+                    backup = add_room_spawn(vnum, cmd, obj_vnum, max_count)
+                except Exception as e:
+                    self._send_json(400, {"error": str(e)})
+                    return
+                self._send_json(200, {"ok": True, "message": f"Spawn added. Backup: {os.path.basename(backup)}"})
+                return
+            if parsed.path == "/api/reset":
+                qs = parse_qs(parsed.query)
+                vnum = int(qs.get("vnum", [0])[0])
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                try:
+                    payload = json.loads(raw.decode("utf-8"))
+                except Exception as e:
+                    self._send_json(400, {"error": f"Invalid JSON: {e}"})
+                    return
+                cmd = payload.get("cmd", "")
+                if_flag = int(payload.get("if_flag", 0))
+                arg1 = int(payload.get("arg1", 0))
+                arg2 = int(payload.get("arg2", 0))
+                arg3 = int(payload.get("arg3", 0))
+                comment = payload.get("comment", "")
+                try:
+                    backup = append_zone_reset(vnum, cmd, if_flag, arg1, arg2, arg3, comment)
+                except Exception as e:
+                    self._send_json(400, {"error": str(e)})
+                    return
+                self._send_json(200, {"ok": True, "message": f"Reset appended. Backup: {os.path.basename(backup)}"})
                 return
             self._send(404, b"not found", "text/plain; charset=utf-8")
             return

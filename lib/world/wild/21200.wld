@@ -51,14 +51,6 @@ Area transitabile~
 Sei in un'area transitabile.
 ~
 21200 0 1
-D0
-~
-~
-0 0 20532 0
-D0
-~
-~
-0 0 20599 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -67,22 +59,6 @@ Area transitabile~
 Sei in un'area transitabile.
 ~
 21200 0 1
-D0
-~
-~
-0 0 1654 0
-D1
-~
-~
-0 0 648 0
-D4
-~
-~
-0 0 21275 0
-D5
-~
-~
-0 0 1 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
