@@ -62,13 +62,21 @@ def parse_wild_table():
         i += 1
         if not sym_line:
             continue
-        symbol = sym_line.split()[0]
+        sym_parts = sym_line.split()
+        symbol = sym_parts[0]
         if len(symbol) != 1:
             symbol = symbol[0]
+        color = 0
+        if len(sym_parts) >= 2:
+            try:
+                color = int(sym_parts[1])
+            except ValueError:
+                color = 0
         entries.append({
             "id": wild_id,
             "symbol": symbol,
             "name": " ".join(name_lines).strip(),
+            "color": color,
         })
     if not entries:
         raise SystemExit("No wild_table entries found")
@@ -974,7 +982,8 @@ function renderPalette() {
     }
     const div = document.createElement('div');
     div.className = 'palette-item' + (item.id === state.selectedId ? ' active' : '');
-    div.textContent = `${item.symbol}  #${item.id}  ${item.name}`;
+    const color = colorFromIndex(item.color || 0);
+    div.innerHTML = `<span style="color:${color}">${item.symbol}</span>  #${item.id}  ${item.name}`;
     div.addEventListener('click', () => {
       state.selectedId = item.id;
       renderPalette();
@@ -1011,10 +1020,38 @@ function drawGrid() {
         ctx.fillStyle = '#1f6b3a';
         ctx.fillRect(x * size, y * size, size, size);
       }
-      ctx.fillStyle = '#e6e6e6';
+      const color = item ? colorFromIndex(item.color || 0) : '#e6e6e6';
+      ctx.fillStyle = color;
       ctx.fillText(sym, cx, cy);
     }
   }
+}
+
+function colorFromIndex(idx) {
+  const map = {
+    1: '#202020',
+    2: '#e74c3c',
+    3: '#2ecc71',
+    4: '#f1c40f',
+    5: '#3498db',
+    6: '#9b59b6',
+    7: '#1abc9c',
+    8: '#ecf0f1',
+    9: '#ffffff',
+    10: '#ffffff',
+    11: '#e6e6e6',
+    12: '#e6e6e6',
+    13: '#95a5a6',
+    14: '#000000',
+    15: '#ff7675',
+    16: '#55efc4',
+    17: '#ffeaa7',
+    18: '#74b9ff',
+    19: '#a29bfe',
+    20: '#81ecec',
+    21: '#ffffff',
+  };
+  return map[idx] || '#e6e6e6';
 }
 
 function gridPos(evt) {
@@ -1091,6 +1128,32 @@ cellSizeEl.addEventListener('change', () => {
 cellClear.addEventListener('click', () => {
   setSelectedCell(null);
   setStatus('Selection cleared.');
+});
+
+function moveSelection(dx, dy) {
+  if (!state.selected) {
+    setSelectedCell({x: 0, y: 0});
+    scrollToCell({x: 0, y: 0});
+    return;
+  }
+  const nx = Math.max(0, Math.min(state.width - 1, state.selected.x + dx));
+  const ny = Math.max(0, Math.min(state.height - 1, state.selected.y + dy));
+  setSelectedCell({x: nx, y: ny});
+  scrollToCell({x: nx, y: ny});
+}
+
+window.addEventListener('keydown', (evt) => {
+  if (!state.zone) return;
+  if (evt.target && (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA' || evt.target.tagName === 'SELECT')) {
+    return;
+  }
+  switch (evt.key) {
+    case 'ArrowUp': moveSelection(0, -1); evt.preventDefault(); break;
+    case 'ArrowDown': moveSelection(0, 1); evt.preventDefault(); break;
+    case 'ArrowLeft': moveSelection(-1, 0); evt.preventDefault(); break;
+    case 'ArrowRight': moveSelection(1, 0); evt.preventDefault(); break;
+    default: break;
+  }
 });
 
 zoomInBtn.addEventListener('click', () => {

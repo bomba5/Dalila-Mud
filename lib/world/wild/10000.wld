@@ -1267,10 +1267,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D2
-~
-~
-0 0 2084052 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1894,7 +1890,7 @@ Sei in un punto di accesso verso un'area del mondo.
 D2
 ~
 ~
-0 0 2094052 0
+0 0 2094042 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2038,7 +2034,7 @@ Sei in un punto di accesso verso un'area del mondo.
 D0
 ~
 ~
-0 0 2095652 0
+0 0 2095641 0
 F
  0 0 0 0 0 0 0 0 0 0
 S

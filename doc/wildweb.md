@@ -31,6 +31,7 @@ You’ll see a selector page:
 - Palette of symbols (id + name) from `lib/world/wild/wild_table`
 - Click/drag paint
 - Zoom controls and query mode (click a cell to read id/name/vnum)
+- Tile symbols are colored using the in‑game wilderness color index
 - Auto backup on save: `lib/world/wild/<zone>.map.bak-YYYYmmdd-HHMMSS`
 - Entrances/exits editor for wilderness/miniwild special rooms
 - Room editor for regular `.wld` areas (form‑based)
