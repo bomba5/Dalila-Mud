@@ -889,12 +889,14 @@ HTML = """<!doctype html>
     </div>
     <div class="spacer"></div>
     <div class="status" id="status">Idle</div>
+    <a class="btn" href="/help" target="_blank">Help</a>
     <button id="saveBtn" class="btn">Save</button>
   </header>
   <main>
     <aside id="exits">
-      <div class="meta">Entrances/Exits</div>
-      <div class="meta" id="cellMeta">No cell selected.</div>
+      <div class="meta" id="cellTitle">Cell (none)</div>
+      <div class="meta" id="cellInfo" style="white-space:pre-wrap; background:#0f141a; border:1px solid #2a2f35; padding:6px;">No cell selected.</div>
+      <div class="status" id="status">Idle</div>
       <div class="row" style="margin:6px 0;">
         <button id="cellClear" class="btn">Clear Selection</button>
       </div>
@@ -941,6 +943,7 @@ const state = {
   isDown: false,
   selected: null,
   areaSelection: new Set(),
+  entranceCells: new Set(),
 };
 
 const zoneSelect = document.getElementById('zoneSelect');
@@ -958,7 +961,8 @@ const zoomOutBtn = document.getElementById('zoomOut');
 const paletteList = document.getElementById('paletteList');
 const paletteMeta = document.getElementById('paletteMeta');
 const paletteSearch = document.getElementById('paletteSearch');
-const cellMeta = document.getElementById('cellMeta');
+const cellTitle = document.getElementById('cellTitle');
+const cellInfo = document.getElementById('cellInfo');
 const cellClear = document.getElementById('cellClear');
 const exitDir = document.getElementById('exitDir');
 const exitTarget = document.getElementById('exitTarget');
@@ -969,6 +973,7 @@ const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
 
 function setStatus(msg) { statusEl.textContent = msg; }
+function setInfo(msg) { cellInfo.textContent = msg; }
 
 function fetchJson(url, opts) {
   return fetch(url, opts).then(r =>
@@ -1025,6 +1030,9 @@ function drawGrid() {
       const cy = y * size + size / 2;
       if (state.selected && state.selected.x === x && state.selected.y === y) {
         ctx.fillStyle = '#1f6b3a';
+        ctx.fillRect(x * size, y * size, size, size);
+      } else if (state.entranceCells.has(`${x},${y}`)) {
+        ctx.fillStyle = 'rgba(80, 160, 255, 0.25)';
         ctx.fillRect(x * size, y * size, size, size);
       }
       if (state.areaSelection.has(`${x},${y}`)) {
@@ -1087,18 +1095,24 @@ function formatCellInfo(pos) {
   } else if (state.wilderness === 2) {
     vnum = (state.zone * 100) + (vy * 100) + vx;
   }
-  return `zone ${state.zone} ${state.name} | x=${vx} y=${vy} vnum=${vnum} | ${sym} #${id} ${name}`;
+  return {
+    vnum: vnum,
+    text: `Pos: x=${vx} y=${vy}\nTile: ${sym} #${id} ${name}`
+  };
 }
 
 function setSelectedCell(pos) {
   state.selected = pos;
   if (!pos) {
-    cellMeta.textContent = 'No cell selected.';
+    cellTitle.textContent = 'Cell (none)';
+    setInfo('No cell selected.');
     loadExitList();
     drawGrid();
     return;
   }
-  cellMeta.textContent = formatCellInfo(pos);
+  const info = formatCellInfo(pos);
+  cellTitle.textContent = `Cell #${info.vnum}`;
+  setInfo(info.text);
   loadExitList();
   drawGrid();
 }
@@ -1109,7 +1123,9 @@ function paintAt(evt) {
   if (!pos) return;
   state.grid[pos.y][pos.x] = state.selectedId;
   drawGrid();
-  setStatus(formatCellInfo(pos));
+  const info = formatCellInfo(pos);
+  cellTitle.textContent = `Cell #${info.vnum}`;
+  setInfo(info.text);
   setSelectedCell(pos);
 }
 
@@ -1131,7 +1147,9 @@ canvas.addEventListener('mousedown', (evt) => {
   if (state.mode === 'query') {
     const pos = gridPos(evt);
     if (pos) {
-      setStatus(formatCellInfo(pos));
+      const info = formatCellInfo(pos);
+      cellTitle.textContent = `Cell #${info.vnum}`;
+      setInfo(info.text);
       setSelectedCell(pos);
     }
   } else if (state.mode === 'select') {
@@ -1151,6 +1169,7 @@ window.addEventListener('mouseup', () => { state.isDown = false; });
 cellSizeEl.addEventListener('change', () => {
   resizeCanvas();
   drawGrid();
+  if (state.selected) scrollToCell(state.selected);
 });
 
 cellClear.addEventListener('click', () => {
@@ -1162,12 +1181,18 @@ function moveSelection(dx, dy) {
   if (!state.selected) {
     setSelectedCell({x: 0, y: 0});
     scrollToCell({x: 0, y: 0});
+    const info = formatCellInfo({x: 0, y: 0});
+    cellTitle.textContent = `Cell #${info.vnum}`;
+    setInfo(info.text);
     return;
   }
   const nx = Math.max(0, Math.min(state.width - 1, state.selected.x + dx));
   const ny = Math.max(0, Math.min(state.height - 1, state.selected.y + dy));
   setSelectedCell({x: nx, y: ny});
   scrollToCell({x: nx, y: ny});
+  const info = formatCellInfo({x: nx, y: ny});
+  cellTitle.textContent = `Cell #${info.vnum}`;
+  setInfo(info.text);
 }
 
 window.addEventListener('keydown', (evt) => {
@@ -1189,12 +1214,14 @@ zoomInBtn.addEventListener('click', () => {
   cellSizeEl.value = val;
   resizeCanvas();
   drawGrid();
+  if (state.selected) scrollToCell(state.selected);
 });
 zoomOutBtn.addEventListener('click', () => {
   const val = Math.max(4, (parseInt(cellSizeEl.value, 10) || 10) - 1);
   cellSizeEl.value = val;
   resizeCanvas();
   drawGrid();
+  if (state.selected) scrollToCell(state.selected);
 });
 
 function setMode(mode) {
@@ -1241,6 +1268,19 @@ selectionClearBtn.addEventListener('click', () => {
   drawGrid();
   setStatus('Selection cleared.');
 });
+
+document.getElementById('map-wrap').addEventListener('wheel', (evt) => {
+  if (!evt.ctrlKey && !evt.shiftKey) return;
+  evt.preventDefault();
+  const delta = evt.deltaY;
+  let val = parseInt(cellSizeEl.value, 10) || 10;
+  val += (delta < 0 ? 1 : -1);
+  val = Math.max(4, Math.min(24, val));
+  cellSizeEl.value = val;
+  resizeCanvas();
+  drawGrid();
+  if (state.selected) scrollToCell(state.selected);
+}, { passive: false });
 
 loadBtn.addEventListener('click', async () => {
   const zone = parseInt(zoneSelect.value, 10);
@@ -1308,10 +1348,21 @@ function scrollToCell(pos) {
   wrap.scrollTop = Math.max(0, cy - wrap.clientHeight / 2);
 }
 
+function updateEntranceCells(exits) {
+  state.entranceCells.clear();
+  if (!exits) return;
+  for (const vnum of Object.keys(exits)) {
+    const pos = vnumToCell(parseInt(vnum, 10));
+    if (!pos) continue;
+    state.entranceCells.add(`${pos.x},${pos.y}`);
+  }
+}
+
 async function loadExitList() {
   if (!state.zone) return;
   try {
     const data = await fetchJson(`/api/exits?zone=${state.zone}`);
+    updateEntranceCells(data.exits || {});
     exitList.innerHTML = '';
     if (!data.exits || Object.keys(data.exits).length === 0) {
       exitList.textContent = 'No exits defined.';
@@ -1376,6 +1427,7 @@ async function loadExitList() {
     if (!exitList.innerHTML) {
       exitList.textContent = 'No exits for selected cell.';
     }
+    drawGrid();
   } catch (e) {
     exitList.textContent = `Failed to load exits: ${e.message}`;
   }
@@ -1491,6 +1543,7 @@ ROOM_HTML = """<!doctype html>
       <button id="loadBtn" class="btn">Load</button>
       <button id="openMapBtn" class="btn">Open Map</button>
     </div>
+    <a class="btn" href="/help" target="_blank">Help</a>
     <div class="meta" id="status">Idle</div>
     <button id="saveBtn" class="btn">Save</button>
   </header>
@@ -1947,6 +2000,7 @@ ZONE_HTML = """<!doctype html>
     <button id="loadBtn" class="btn">Load</button>
     <label>Zoom</label>
     <input id="cellSize" type="number" min="8" max="60" value="20" style="width:60px">
+    <a class="btn" href="/help" target="_blank">Help</a>
     <div class="meta" id="status">Idle</div>
   </header>
   <main>
@@ -2058,6 +2112,86 @@ if (params.get('zone')) {
 </html>
 """
 
+def load_help_html():
+    path = os.path.join(ROOT, "doc", "wildweb.md")
+    text = read_text(path)
+    def esc(s):
+        return (s.replace("&", "&amp;")
+                 .replace("<", "&lt;")
+                 .replace(">", "&gt;"))
+    body = []
+    in_list = False
+    in_code = False
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if line.startswith("```"):
+            if not in_code:
+                body.append("<pre>")
+                in_code = True
+            else:
+                body.append("</pre>")
+                in_code = False
+            continue
+        if in_code:
+            body.append(esc(line))
+            continue
+        if line.startswith("## "):
+            if in_list:
+                body.append("</ul>")
+                in_list = False
+            body.append(f"<h2>{esc(line[3:])}</h2>")
+            continue
+        if line.startswith("# "):
+            if in_list:
+                body.append("</ul>")
+                in_list = False
+            body.append(f"<h1>{esc(line[2:])}</h1>")
+            continue
+        if line.startswith("- "):
+            if not in_list:
+                body.append("<ul>")
+                in_list = True
+            body.append(f"<li>{esc(line[2:])}</li>")
+            continue
+        if not line.strip():
+            if in_list:
+                body.append("</ul>")
+                in_list = False
+            body.append("<br>")
+            continue
+        if in_list:
+            body.append("</ul>")
+            in_list = False
+        body.append(f"<p>{esc(line)}</p>")
+    if in_list:
+        body.append("</ul>")
+    if in_code:
+        body.append("</pre>")
+    html = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>World Editor Help</title>
+  <style>
+    body { margin: 0; font-family: monospace; background: #101417; color: #e6e6e6; }
+    main { max-width: 900px; margin: 40px auto; padding: 20px; }
+    h1, h2 { color: #e6e6e6; }
+    code { background: #0f141a; padding: 2px 4px; border: 1px solid #2a2f35; }
+    pre { background: #0f141a; padding: 12px; border: 1px solid #2a2f35; overflow: auto; }
+    a { color: #7cc7ff; }
+    ul { line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+""" + "\n".join(body) + """
+  </main>
+</body>
+</html>
+"""
+    return html
+
 
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, content_type="text/html; charset=utf-8"):
@@ -2075,6 +2209,10 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             self._send(200, HOME_HTML.encode("utf-8"))
+            return
+        if parsed.path == "/help":
+            html = load_help_html()
+            self._send(200, html.encode("utf-8"))
             return
         if parsed.path == "/wild":
             self._send(200, HTML.encode("utf-8"))

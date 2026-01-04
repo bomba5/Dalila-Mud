@@ -18,6 +18,7 @@ http://<your-host>:8080
 You’ll see a selector page:
 - **Edit Wild/Miniwild** → `/wild`
 - **Edit Room** → `/room`
+- **Help** button opens `/help`
 
 ## Layout (Map Editor)
 
@@ -36,6 +37,7 @@ You’ll see a selector page:
 - Entrances/exits editor for wilderness/miniwild special rooms
 - Room editor for regular `.wld` areas (form‑based)
 - Basic spawns (M/O) for rooms via zone resets
+- Selection mode for irregular multi‑cell painting
 
 ## Basic usage
 
@@ -52,11 +54,19 @@ You’ll see a selector page:
 - Use this to confirm coordinates or pick an entrance location.
 - Use **Clear Selection** to unselect a cell and show all exits again.
 
+## Selection mode
+
+- Switch to **Select** mode to brush an irregular selection.
+- Hold **Alt** while selecting to remove from the selection.
+- **Fill Selection** paints the selection with the current palette tile.
+- **Clear Selection** removes the selection overlay.
+
 ## Notes
 
 - The editor reads zone type from `lib/world/zon/<zone>.zon`.
 - Only wilderness/miniwild zones are listed.
 - Restart the server after saving to load new maps.
+- Mouse wheel zoom: hold **Ctrl** or **Shift** to zoom, centered on the selected cell.
 
 ## Entrances/Exits
 
