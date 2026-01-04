@@ -17,7 +17,9 @@ http://<your-host>:8080
 
 You’ll see a selector page:
 - **Edit Wild/Miniwild** → `/wild`
-- **Edit Room** → `/room`
+- **Edit Zone/Rooms** → `/room`
+- **Edit Mob** → `/mob`
+- **Edit Object** → `/obj`
 - **Help** button opens `/help`
 
 ## Layout (Map Editor)
@@ -82,7 +84,7 @@ Exit list behavior:
 - Click an exit in the list to jump/select that cell in the grid.
 - Click **open** to open the target room in the Room Editor.
 
-## Room Editor (regular areas)
+## Zone Editor (regular areas)
 
 Open in a new tab:
 
@@ -95,7 +97,12 @@ Features:
 - Adds backups to the source `.wld` file.
 - If the room is a wilderness/miniwild map cell without a special room block,
   the editor opens it as **read‑only**.
+- If the room does not exist yet, the editor creates a minimal special room
+  block based on the current terrain cell.
 - Embedded **Zone Map** for non‑wild zones with connecting lines and direction labels.
+- Spawn list includes **open** links to Mob/Object editors.
+- Search rooms by name/description from the header.
+- Open zones by number and search zones by name/number.
 
 ## Zone Map (non‑wild zones)
 
@@ -103,6 +110,7 @@ The Room Editor shows a zone map when the room belongs to a non‑wild zone.
 
 - Grid layout is built from N/E/S/W exits.
 - Lines show connections and direction labels.
+- Dashed links show exits to other zones or wilderness (with target vnum).
 - Click a room to load it in the same tab.
 - Zoom using the input next to the Zone Map header.
 
@@ -113,14 +121,28 @@ The room editor lets you add basic spawns:
 - `O` = object in room
 
 These are appended to the zone file for the room and backed up.
+Use the **Find** input to search mobs/objects by name and fill the VNUM.
 
 Reset commands:
 - The room editor shows room‑related resets (M/O/D/R).
 - You can append any reset command (M/O/E/G/P/D/R) with raw args.
 - These are appended to the zone file and backed up.
 
-This edits `lib/world/wild/<zone>.wld` and creates a backup:
-`lib/world/wild/<zone>.wld.bak-YYYYmmdd-HHMMSS`.
+## Mob/Object Editors
 
-If the room does not exist yet, the editor creates a minimal special room based
-on the current terrain cell.
+Open in a new tab:
+
+```
+http://<your-host>:8080/mob?vnum=<VNUM>
+http://<your-host>:8080/obj?vnum=<VNUM>
+```
+
+- Core name fields are form‑based.
+- Full numeric fields, flags, extras, affects, and triggers are editable.
+- Search mobs/objects by name/description from the header.
+- Object editor shows labeled type/flag/material selectors and APPLY_* affects.
+- Backups are created on save.
+
+Backups:
+- Mobs: `lib/world/mob/<file>.mob.bak-YYYYmmdd-HHMMSS`
+- Objects: `lib/world/obj/<file>.obj.bak-YYYYmmdd-HHMMSS`

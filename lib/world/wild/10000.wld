@@ -51,10 +51,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D2
-~
-~
-0 0 15 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1024,6 +1020,10 @@ F
 S
 #1494502
 Ingresso area~
+D1
+~
+~
+0 0 600 0
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
@@ -1623,10 +1623,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D2
-~
-~
-0 0 2074052 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1659,10 +1655,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D1
-~
-~
-0 0 2074840 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1671,10 +1663,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D3
-~
-~
-0 0 2074864 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1695,10 +1683,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D0
-~
-~
-0 0 2075652 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2259,10 +2243,6 @@ Area~
 Sei all'entrata di un'area
 ~
 10000 0 1
-D1
-~
-~
-0 0 600 0
 S
 #1490486
 Mini area~
