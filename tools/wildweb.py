@@ -877,6 +877,9 @@ HTML = """<!doctype html>
       <label>Mode</label>
       <button id="modePaint" class="btn">Paint</button>
       <button id="modeQuery" class="btn">Query</button>
+      <button id="modeSelect" class="btn">Select</button>
+      <button id="selectionApply" class="btn">Fill Selection</button>
+      <button id="selectionClear" class="btn">Clear Selection</button>
     </div>
     <div class="row">
       <label>Zoom</label>
@@ -937,6 +940,7 @@ const state = {
   name: "",
   isDown: false,
   selected: null,
+  areaSelection: new Set(),
 };
 
 const zoneSelect = document.getElementById('zoneSelect');
@@ -946,6 +950,9 @@ const statusEl = document.getElementById('status');
 const cellSizeEl = document.getElementById('cellSize');
 const modePaintBtn = document.getElementById('modePaint');
 const modeQueryBtn = document.getElementById('modeQuery');
+const modeSelectBtn = document.getElementById('modeSelect');
+const selectionApplyBtn = document.getElementById('selectionApply');
+const selectionClearBtn = document.getElementById('selectionClear');
 const zoomInBtn = document.getElementById('zoomIn');
 const zoomOutBtn = document.getElementById('zoomOut');
 const paletteList = document.getElementById('paletteList');
@@ -1018,6 +1025,10 @@ function drawGrid() {
       const cy = y * size + size / 2;
       if (state.selected && state.selected.x === x && state.selected.y === y) {
         ctx.fillStyle = '#1f6b3a';
+        ctx.fillRect(x * size, y * size, size, size);
+      }
+      if (state.areaSelection.has(`${x},${y}`)) {
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.25)';
         ctx.fillRect(x * size, y * size, size, size);
       }
       const color = item ? colorFromIndex(item.color || 0) : '#e6e6e6';
@@ -1102,6 +1113,19 @@ function paintAt(evt) {
   setSelectedCell(pos);
 }
 
+function selectAt(evt) {
+  const pos = gridPos(evt);
+  if (!pos) return;
+  const key = `${pos.x},${pos.y}`;
+  if (evt.altKey) {
+    state.areaSelection.delete(key);
+  } else {
+    state.areaSelection.add(key);
+  }
+  setSelectedCell(pos);
+  drawGrid();
+}
+
 canvas.addEventListener('mousedown', (evt) => {
   state.isDown = true;
   if (state.mode === 'query') {
@@ -1110,13 +1134,17 @@ canvas.addEventListener('mousedown', (evt) => {
       setStatus(formatCellInfo(pos));
       setSelectedCell(pos);
     }
+  } else if (state.mode === 'select') {
+    selectAt(evt);
   } else {
     paintAt(evt);
   }
 });
 canvas.addEventListener('mousemove', (evt) => {
   if (state.mode === 'query') return;
-  if (state.isDown) paintAt(evt);
+  if (!state.isDown) return;
+  if (state.mode === 'select') selectAt(evt);
+  else paintAt(evt);
 });
 window.addEventListener('mouseup', () => { state.isDown = false; });
 
@@ -1174,14 +1202,45 @@ function setMode(mode) {
   if (mode === 'paint') {
     modePaintBtn.disabled = true;
     modeQueryBtn.disabled = false;
+    modeSelectBtn.disabled = false;
+  } else if (mode === 'select') {
+    modePaintBtn.disabled = false;
+    modeQueryBtn.disabled = false;
+    modeSelectBtn.disabled = true;
   } else {
     modePaintBtn.disabled = false;
     modeQueryBtn.disabled = true;
+    modeSelectBtn.disabled = false;
   }
 }
 
 modePaintBtn.addEventListener('click', () => setMode('paint'));
 modeQueryBtn.addEventListener('click', () => setMode('query'));
+modeSelectBtn.addEventListener('click', () => setMode('select'));
+
+selectionApplyBtn.addEventListener('click', () => {
+  if (state.selectedId === null || state.areaSelection.size === 0) {
+    setStatus('Select tiles and choose a palette item first.');
+    return;
+  }
+  for (const key of state.areaSelection) {
+    const parts = key.split(',');
+    const x = parseInt(parts[0], 10);
+    const y = parseInt(parts[1], 10);
+    if (!Number.isNaN(x) && !Number.isNaN(y)) {
+      state.grid[y][x] = state.selectedId;
+    }
+  }
+  state.areaSelection.clear();
+  drawGrid();
+  setStatus('Selection filled.');
+});
+
+selectionClearBtn.addEventListener('click', () => {
+  state.areaSelection.clear();
+  drawGrid();
+  setStatus('Selection cleared.');
+});
 
 loadBtn.addEventListener('click', async () => {
   const zone = parseInt(zoneSelect.value, 10);
