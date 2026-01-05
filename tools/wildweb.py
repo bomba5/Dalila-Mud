@@ -1311,6 +1311,54 @@ def load_zone_exits(zone):
     return exit_map
 
 
+def normalize_room_exit_order(block_lines):
+    header_idx = None
+    for i, line in enumerate(block_lines):
+        parts = line.strip().split()
+        if len(parts) == 3:
+            try:
+                int(parts[0])
+                int(parts[1])
+                int(parts[2])
+                header_idx = i
+                break
+            except ValueError:
+                continue
+    if header_idx is None:
+        return block_lines
+    exits = []
+    cleaned = []
+    i = 0
+    while i < len(block_lines):
+        line = block_lines[i].strip()
+        if i < header_idx and line.startswith("D") and len(line) > 1 and line[1].isdigit():
+            if i + 3 < len(block_lines):
+                exits.append(block_lines[i : i + 4])
+                i += 4
+                continue
+        cleaned.append(block_lines[i])
+        i += 1
+    if not exits:
+        return cleaned
+    insert_at = None
+    for i, line in enumerate(cleaned):
+        parts = line.strip().split()
+        if len(parts) == 3:
+            try:
+                int(parts[0])
+                int(parts[1])
+                int(parts[2])
+                insert_at = i + 1
+                break
+            except ValueError:
+                continue
+    if insert_at is None:
+        return cleaned
+    flat_exits = [line for block in exits for line in block]
+    cleaned[insert_at:insert_at] = flat_exits
+    return cleaned
+
+
 def update_wld_exit(zone, vnum, dir_num, to_vnum, match_to_vnum=None):
     wld_path = os.path.join(WILD_DIR, f"{zone}.wld")
     lines = []
@@ -1373,7 +1421,7 @@ def update_wld_exit(zone, vnum, dir_num, to_vnum, match_to_vnum=None):
         ]
         lines.extend(block)
     else:
-        block_lines = lines[start:end]
+        block_lines = normalize_room_exit_order(lines[start:end])
         # Find existing exit block for dir
         i = 0
         replaced = False
