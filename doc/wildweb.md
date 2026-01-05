@@ -9,6 +9,18 @@ plus entrances/exits and basic spawns.
 python tools/wildweb.py --host 0.0.0.0 --port 8080
 ```
 
+## Build (non‑Nix)
+
+```
+make build
+```
+
+Optional overrides:
+
+```
+make build BUILD_CC=clang BUILD_FLAGS="-Wall -std=gnu89 -Wno-implicit-int"
+```
+
 Open in a browser:
 
 ```
