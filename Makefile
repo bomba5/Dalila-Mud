@@ -1,4 +1,4 @@
-BUILD_CC ?= cc
+BUILD_CC ?= clang
 BUILD_FLAGS ?= -Wall -std=gnu89 -Wno-implicit-int
 
 .PHONY: build clean

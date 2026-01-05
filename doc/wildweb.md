@@ -15,10 +15,10 @@ python tools/wildweb.py --host 0.0.0.0 --port 8080
 make build
 ```
 
-Optional overrides:
+Defaults to clang. Optional overrides:
 
 ```
-make build BUILD_CC=clang BUILD_FLAGS="-Wall -std=gnu89 -Wno-implicit-int"
+make build BUILD_CC=gcc BUILD_FLAGS="-Wall -std=gnu89 -Wno-implicit-int"
 ```
 
 Open in a browser:
