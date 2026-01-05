@@ -39,10 +39,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D5
-~
-~
-0 0 1399 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -143,10 +139,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D2
-~
-~
-0 0 20 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -179,10 +171,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D2
-~
-~
-0 0 77 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -203,10 +191,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D1
-~
-~
-0 0 50209 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -519,10 +503,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D2
-~
-~
-1 0 40135 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -564,17 +544,13 @@ F
 S
 #1466412
 Ingresso area~
-Sei in un punto di accesso verso un'area del mondo.
-~
-10000 0 1
 D3
 ~
 ~
-0 0 419 0
-D5
+0 0 40135 0
+Sei in un punto di accesso verso un'area del mondo.
 ~
-~
-0 0 901 0
+10000 0 1
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -631,10 +607,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D5
-~
-~
-1 0 -1 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2042,7 +2014,7 @@ Sei in un punto di accesso verso un'area del mondo.
 D1
 ~
 ~
-0 0 8800 0
+0 0 11400 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2283,5 +2255,15 @@ D3
 ~
 ~
 0 0 6128 0
+S
+#1422437
+Rigogliosissima foresta tropicale di Atun (giungla)~
+nodesc.
+~
+10000 0 3
+D1
+~
+~
+0 0 50209 0
 S
 $
