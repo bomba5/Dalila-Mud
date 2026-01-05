@@ -327,10 +327,6 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
-D4
-~
-~
-0 0 19124 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -544,13 +540,13 @@ F
 S
 #1466412
 Ingresso area~
-Sei in un punto di accesso verso un'area del mondo.
-~
-10000 0 1
 D3
 ~
 ~
-0 0 40135 0
+0 0 8800 0
+Sei in un punto di accesso verso un'area del mondo.
+~
+10000 0 1
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2265,5 +2261,15 @@ D1
 ~
 ~
 0 0 50209 0
+S
+#1449469
+Largo sentiero battuto~
+Sei su un chiaro sentiero frequentato, largo circa un metro.
+~
+10000 0 10
+D0
+~
+~
+0 0 40135 0
 S
 $
