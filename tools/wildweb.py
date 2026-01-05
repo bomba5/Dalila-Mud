@@ -1359,6 +1359,35 @@ def normalize_room_exit_order(block_lines):
     return cleaned
 
 
+def sanitize_wild_wld():
+    if not os.path.isdir(WILD_DIR):
+        raise ValueError("Wild directory not found.")
+    changed = 0
+    for name in os.listdir(WILD_DIR):
+        if not name.endswith(".wld"):
+            continue
+        path = os.path.join(WILD_DIR, name)
+        lines = read_text(path).splitlines()
+        blocks = split_wld_blocks(lines)
+        if not blocks:
+            continue
+        updated = False
+        for start, end in blocks:
+            block_lines = lines[start:end]
+            fixed = normalize_room_exit_order(block_lines)
+            if fixed != block_lines:
+                lines[start:end] = fixed
+                updated = True
+        if updated:
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            backup_path = f"{path}.bak-{timestamp}"
+            shutil.copy2(path, backup_path)
+            with open(path, "w", encoding="latin-1") as f:
+                f.write("\n".join(lines) + "\n")
+            changed += 1
+    return changed
+
+
 def update_wld_exit(zone, vnum, dir_num, to_vnum, match_to_vnum=None):
     wld_path = os.path.join(WILD_DIR, f"{zone}.wld")
     lines = []
@@ -4558,7 +4587,13 @@ def main():
     parser = argparse.ArgumentParser(description="Wild/Miniwild web editor.")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", default=8080, type=int)
+    parser.add_argument("--sanitize-wild", action="store_true", help="Normalize wild .wld exit ordering.")
     args = parser.parse_args()
+
+    if args.sanitize_wild:
+        count = sanitize_wild_wld()
+        print(f"Sanitized wild rooms in {count} file(s).")
+        return
 
     server = HTTPServer((args.host, args.port), Handler)
     print(f"Serving on http://{args.host}:{args.port}")
