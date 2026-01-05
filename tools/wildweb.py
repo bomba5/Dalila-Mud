@@ -2368,7 +2368,15 @@ function renderExits() {
   for (const ex of roomData.exits) {
     const tr = document.createElement('tr');
     const dir = document.createElement('td');
-    dir.textContent = dirNames[ex.dir] ?? ex.dir;
+    const dirSelect = document.createElement('select');
+    for (const [num, label] of Object.entries(dirNames)) {
+      const opt = document.createElement('option');
+      opt.value = num;
+      opt.textContent = label;
+      dirSelect.appendChild(opt);
+    }
+    dirSelect.value = String(ex.dir);
+    dir.appendChild(dirSelect);
     const to = document.createElement('td');
     const toInput = document.createElement('input');
     toInput.type = 'number';
@@ -2405,7 +2413,7 @@ function renderExits() {
     tr.appendChild(trk);
     tr.appendChild(actions);
     exitsTable.appendChild(tr);
-    ex._inputs = {toInput, infoInput, keyInput, trkInput};
+    ex._inputs = {dirSelect, toInput, infoInput, keyInput, trkInput};
   }
 }
 
@@ -2528,6 +2536,7 @@ function renderResets() {
 
 function syncExitInputs() {
   for (const ex of roomData.exits) {
+    ex.dir = parseInt(ex._inputs.dirSelect.value, 10) || 0;
     ex.to_room = parseInt(ex._inputs.toInput.value, 10) || 0;
     ex.exit_info = parseInt(ex._inputs.infoInput.value, 10) || 0;
     ex.key = parseInt(ex._inputs.keyInput.value, 10) || 0;
