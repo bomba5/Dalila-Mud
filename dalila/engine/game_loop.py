@@ -280,11 +280,16 @@ class GameWorld:
     def heartbeat(self) -> None:
         """Execute periodic game tasks based on the current pulse.
 
-        Mirrors heartbeat() from comm.c. Phase 1 only implements:
+        Mirrors heartbeat() from comm.c.
         - zone_update (PULSE_ZONE = 10 seconds)
         - weather_and_time (PULSE_TIMECOUNT = 150 seconds)
+        - perform_violence (PULSE_VIOLENCE = 3 seconds) -- Phase 3
         """
         pulse = self.pulse
+
+        if pulse % PULSE_VIOLENCE == 0:
+            from dalila.combat.fight import perform_violence
+            perform_violence(self)
 
         if pulse % PULSE_ZONE == 0:
             self._zone_update()

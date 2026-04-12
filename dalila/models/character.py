@@ -337,3 +337,8 @@ class CharData:
     # Follow/group (runtime pointers, not persisted)
     master: object | None = None           # Who this char follows
     followers: list[Any] = field(default_factory=list)  # Who follows this char
+
+    # Combat state (Phase 3)
+    _fighting: object | None = None        # Who this char is fighting
+    last_flee: int = 0                     # Time of last flee attempt
+    combat_duration: int = 0               # Rounds in current combat

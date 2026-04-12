@@ -119,6 +119,20 @@ from dalila.commands.movement import (
 )
 from dalila.commands.social import do_social, find_social
 
+# Import Phase 3 command modules (Combat & Magic)
+from dalila.commands.offensive import (
+    do_assist,
+    do_backstab,
+    do_bash,
+    do_disarm,
+    do_flee,
+    do_hit,
+    do_kick,
+    do_kill,
+    do_rescue,
+)
+from dalila.commands.magic import do_cast
+
 
 # ---------------------------------------------------------------------------
 # Command implementations that remain in interpreter.py
@@ -349,6 +363,29 @@ CMD_TABLE: list[CommandInfo] = [
     CommandInfo("segui", Position.POS_RESTING, do_follow, 0),
     CommandInfo("group", Position.POS_RESTING, do_group, 0),
     CommandInfo("gruppo", Position.POS_RESTING, do_group, 0),
+
+    # ---- Combat commands (Phase 3) ----
+    CommandInfo("kill", Position.POS_FIGHTING, do_kill, 0),
+    CommandInfo("uccidi", Position.POS_FIGHTING, do_kill, 0),
+    CommandInfo("hit", Position.POS_FIGHTING, do_hit, 0),
+    CommandInfo("colpisci", Position.POS_FIGHTING, do_hit, 0),
+    CommandInfo("flee", Position.POS_FIGHTING, do_flee, 0),
+    CommandInfo("fuggi", Position.POS_FIGHTING, do_flee, 0),
+    CommandInfo("kick", Position.POS_FIGHTING, do_kick, 0),
+    CommandInfo("calcia", Position.POS_FIGHTING, do_kick, 0),
+    CommandInfo("bash", Position.POS_FIGHTING, do_bash, 0),
+    CommandInfo("spingi", Position.POS_FIGHTING, do_bash, 0),
+    CommandInfo("backstab", Position.POS_STANDING, do_backstab, 0),
+    CommandInfo("pugnala", Position.POS_STANDING, do_backstab, 0),
+    CommandInfo("rescue", Position.POS_FIGHTING, do_rescue, 0),
+    CommandInfo("salva", Position.POS_FIGHTING, do_rescue, 0),
+    CommandInfo("assist", Position.POS_FIGHTING, do_assist, 0),
+    CommandInfo("assisti", Position.POS_FIGHTING, do_assist, 0),
+    CommandInfo("disarm", Position.POS_FIGHTING, do_disarm, 0),
+
+    # ---- Magic commands (Phase 3) ----
+    CommandInfo("cast", Position.POS_SITTING, do_cast, 0),
+    CommandInfo("lancia", Position.POS_SITTING, do_cast, 0),
 ]
 
 
