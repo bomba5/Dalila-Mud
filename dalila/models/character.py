@@ -324,3 +324,7 @@ class CharData:
     iniz_classe: int = 0
     iniz_ptagg: list[int] = field(default_factory=lambda: [0] * 6)
     iniz_da_aggiungere: int = 0
+
+    # Runtime reference to network descriptor (not persisted)
+    # Uses Any to avoid circular import with dalila.net.descriptor
+    desc: object | None = None
