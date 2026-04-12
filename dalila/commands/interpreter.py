@@ -1,8 +1,8 @@
-"""Command interpreter -- dispatch table and starter commands.
+"""Command interpreter -- dispatch table and all registered commands.
 
 Ported from command_interpreter(), cmd_info[] in interpreter.c.
-Phase 1 implements: look, movement, say, who, quit, score.
-All other commands show "not yet available" placeholder.
+Phase 1 implemented: look, movement, say, who, quit, score.
+Phase 2 adds: enhanced movement/doors, items, communication, socials.
 """
 
 from __future__ import annotations
@@ -72,128 +72,57 @@ SEX_NAMES: dict[int, str] = {
 
 
 # ---------------------------------------------------------------------------
-# Command implementations
+# Import Phase 2 command modules
 # ---------------------------------------------------------------------------
 
-def do_look(ch: CharData, argument: str, desc: Descriptor, world: GameWorld) -> None:
-    """Show room name, description, exits, people, and objects.
-
-    Ported from do_look() / look_at_room() in act.informative.c.
-    Simplified for Phase 1.
-    """
-    if ch.in_room == NOWHERE or ch.in_room not in world.rooms:
-        _send(desc, "Sei nel vuoto.\r\n")
-        return
-
-    room = world.rooms[ch.in_room]
-
-    # Room name
-    _send(desc, f"\r\n&c{room.name}&0\r\n")
-
-    # Room description
-    if room.description:
-        _send(desc, f"{room.description}\r\n")
-
-    # Exits
-    exits = _format_exits(room, world)
-    if exits:
-        _send(desc, f"&g[ Uscite: {exits} ]&0\r\n")
-    else:
-        _send(desc, "&g[ Uscite: Nessuna ]&0\r\n")
-
-    # People in the room
-    for other in room._characters:
-        if other is not ch:
-            name = other.player.name
-            _send(desc, f"&y{name} e' qui.&0\r\n")
-
-    # Objects on the ground (Phase 1: none yet)
-
-
-def do_move(
-    ch: CharData, argument: str, desc: Descriptor, world: GameWorld,
-    direction: int = 0,
-) -> None:
-    """Move the character in a direction.
-
-    Ported from do_move() / perform_move() in act.movement.c.
-    Simplified for Phase 1 -- no ride/fly/door checks.
-    """
-    if ch.in_room == NOWHERE or ch.in_room not in world.rooms:
-        _send(desc, "Non puoi andare da nessuna parte.\r\n")
-        return
-
-    room = world.rooms[ch.in_room]
-    exit_data = room.data.dir_option[direction]
-
-    if exit_data is None or exit_data.to_room == NOWHERE:
-        _send(desc, "Non puoi andare in quella direzione.\r\n")
-        return
-
-    dest_vnum = exit_data.to_room
-    if dest_vnum not in world.rooms:
-        _send(desc, "Non puoi andare in quella direzione.\r\n")
-        return
-
-    # Check if door is closed
-    if exit_data.exit_info & ExitInfo.EX_ISDOOR:
-        if exit_data.exit_info & ExitInfo.EX_CLOSED:
-            _send(desc, "La porta e' chiusa.\r\n")
-            return
-
-    dest_room = world.rooms[dest_vnum]
-
-    # Notify current room
-    dir_name = DIR_NAMES_IT[direction] if direction < len(DIR_NAMES_IT) else "?"
-    for other in room._characters:
-        if other is not ch and other.desc:
-            _send_async(
-                other.desc,
-                f"\r\n{ch.player.name} se ne va verso {dir_name}.\r\n",
-            )
-
-    # Remove from current room
-    if ch in room._characters:
-        room._characters.remove(ch)
-
-    # Move to destination
-    ch.in_room = dest_vnum
-    if ch not in dest_room._characters:
-        dest_room._characters.append(ch)
-
-    # Notify destination room
-    for other in dest_room._characters:
-        if other is not ch and other.desc:
-            _send_async(
-                other.desc,
-                f"\r\n{ch.player.name} e' arrivato.\r\n",
-            )
-
-    # Show the new room
-    do_look(ch, "", desc, world)
+from dalila.commands.communication import (
+    do_emote,
+    do_gossip,
+    do_gsay,
+    do_say,
+    do_shout,
+    do_tell,
+    do_whisper,
+)
+from dalila.commands.informative import (
+    do_exits,
+    do_look,
+    look_at_room,
+)
+from dalila.commands.item import (
+    do_drink,
+    do_drop,
+    do_eat,
+    do_equipment,
+    do_get,
+    do_give,
+    do_inventory,
+    do_put,
+    do_remove,
+    do_wear,
+    do_wield,
+)
+from dalila.commands.movement import (
+    SCMD_CLOSE,
+    SCMD_LOCK,
+    SCMD_OPEN,
+    SCMD_UNLOCK,
+    do_follow,
+    do_gen_door,
+    do_group,
+    do_move,
+    do_rest,
+    do_sit,
+    do_sleep,
+    do_stand,
+    do_wake,
+)
+from dalila.commands.social import do_social, find_social
 
 
-def do_say(ch: CharData, argument: str, desc: Descriptor, world: GameWorld) -> None:
-    """Speak to the room.
-
-    Ported from do_say() in act.comm.c.
-    """
-    if not argument.strip():
-        _send(desc, "Si, ma COSA vuoi dire?\r\n")
-        return
-
-    message = argument.strip()
-    _send(desc, f"Dici, '{message}'\r\n")
-
-    if ch.in_room in world.rooms:
-        room = world.rooms[ch.in_room]
-        for other in room._characters:
-            if other is not ch and other.desc:
-                _send_async(
-                    other.desc,
-                    f"\r\n{ch.player.name} dice, '{message}'\r\n",
-                )
-
+# ---------------------------------------------------------------------------
+# Command implementations that remain in interpreter.py
+# ---------------------------------------------------------------------------
 
 def do_who(ch: CharData, argument: str, desc: Descriptor, world: GameWorld) -> None:
     """List online players.
@@ -268,32 +197,6 @@ def do_score(ch: CharData, argument: str, desc: Descriptor, world: GameWorld) ->
         _send(desc, line)
 
 
-def do_exits(ch: CharData, argument: str, desc: Descriptor, world: GameWorld) -> None:
-    """Show visible exits from the current room.
-
-    Ported from do_exits() in act.informative.c.
-    """
-    if ch.in_room == NOWHERE or ch.in_room not in world.rooms:
-        _send(desc, "Non sei da nessuna parte.\r\n")
-        return
-
-    room = world.rooms[ch.in_room]
-    _send(desc, "Uscite visibili:\r\n")
-
-    found = False
-    for i in range(NUM_OF_DIRS):
-        exit_data = room.data.dir_option[i]
-        if exit_data is not None and exit_data.to_room != NOWHERE:
-            if exit_data.to_room in world.rooms:
-                dest = world.rooms[exit_data.to_room]
-                dir_name = DIR_NAMES_IT[i] if i < len(DIR_NAMES_IT) else "?"
-                _send(desc, f"  {dir_name:8s} - {dest.name}\r\n")
-                found = True
-
-    if not found:
-        _send(desc, "  Nessuna.\r\n")
-
-
 def do_not_implemented(
     ch: CharData, argument: str, desc: Descriptor, world: GameWorld,
 ) -> None:
@@ -315,20 +218,6 @@ def _send_async(desc: Descriptor, text: str) -> None:
     asyncio.ensure_future(desc.send(text))
 
 
-def _format_exits(room: LiveRoom, world: GameWorld) -> str:
-    """Format visible exits as a string like 'N E S'."""
-    short = {"north": "N", "east": "E", "south": "S",
-             "west": "W", "up": "U", "down": "D"}
-    exits = []
-    for i in range(NUM_OF_DIRS):
-        exit_data = room.data.dir_option[i]
-        if exit_data is not None and exit_data.to_room != NOWHERE:
-            if exit_data.to_room in world.rooms:
-                dir_abbr = short.get(DIR_NAMES[i], "?")
-                exits.append(dir_abbr)
-    return " ".join(exits)
-
-
 # ---------------------------------------------------------------------------
 # Movement command factories
 # ---------------------------------------------------------------------------
@@ -341,14 +230,25 @@ def _make_move_cmd(direction: int) -> CommandFunc:
 
 
 # ---------------------------------------------------------------------------
+# Door command factories
+# ---------------------------------------------------------------------------
+
+def _make_door_cmd(scmd: int) -> CommandFunc:
+    """Create a door command function for a specific sub-command."""
+    def _door(ch: CharData, argument: str, desc: Descriptor, world: GameWorld) -> None:
+        do_gen_door(ch, argument, desc, world, scmd=scmd)
+    return _door
+
+
+# ---------------------------------------------------------------------------
 # Command table
 # ---------------------------------------------------------------------------
 
 # Build the command dispatch table matching cmd_info[] from interpreter.c.
-# Phase 1: directions + starter commands. Everything else -> placeholder.
+# Phase 2: directions + core commands + items + communication + positions
 
 CMD_TABLE: list[CommandInfo] = [
-    # Directions (must come first, like in C)
+    # ---- Directions (must come first, like in C) ----
     CommandInfo("north", Position.POS_STANDING, _make_move_cmd(Direction.NORTH), 0),
     CommandInfo("east", Position.POS_STANDING, _make_move_cmd(Direction.EAST), 0),
     CommandInfo("south", Position.POS_STANDING, _make_move_cmd(Direction.SOUTH), 0),
@@ -365,14 +265,16 @@ CMD_TABLE: list[CommandInfo] = [
     # Italian short directions
     CommandInfo("su", Position.POS_STANDING, _make_move_cmd(Direction.UP), 0),
     CommandInfo("giu", Position.POS_STANDING, _make_move_cmd(Direction.DOWN), 0),
-    # Special single-char commands
+
+    # ---- Special single-char commands ----
     CommandInfo("'", Position.POS_RESTING, do_say, 0),
-    # Core commands
+    CommandInfo(":", Position.POS_RESTING, do_emote, 0),
+
+    # ---- Core commands ----
     CommandInfo("look", Position.POS_RESTING, do_look, 0),
     CommandInfo("guarda", Position.POS_RESTING, do_look, 0),
     CommandInfo("l", Position.POS_RESTING, do_look, 0),
     CommandInfo("say", Position.POS_RESTING, do_say, 0),
-    CommandInfo("parla", Position.POS_RESTING, do_say, 0),
     CommandInfo("dici", Position.POS_RESTING, do_say, 0),
     CommandInfo("who", Position.POS_DEAD, do_who, 0),
     CommandInfo("chi", Position.POS_DEAD, do_who, 0),
@@ -382,7 +284,73 @@ CMD_TABLE: list[CommandInfo] = [
     CommandInfo("punteggio", Position.POS_DEAD, do_score, 0),
     CommandInfo("exits", Position.POS_RESTING, do_exits, 0),
     CommandInfo("uscite", Position.POS_RESTING, do_exits, 0),
+
+    # ---- Communication (Phase 2) ----
+    CommandInfo("tell", Position.POS_DEAD, do_tell, 0),
+    CommandInfo("parla", Position.POS_DEAD, do_tell, 0),
+    CommandInfo("whisper", Position.POS_RESTING, do_whisper, 0),
+    CommandInfo("sussurra", Position.POS_RESTING, do_whisper, 0),
+    CommandInfo("shout", Position.POS_RESTING, do_shout, 0),
+    CommandInfo("urla", Position.POS_RESTING, do_shout, 0),
+    CommandInfo("gossip", Position.POS_RESTING, do_gossip, 0),
+    CommandInfo("emote", Position.POS_RESTING, do_emote, 0),
+    CommandInfo("gsay", Position.POS_RESTING, do_gsay, 0),
+
+    # ---- Item manipulation (Phase 2) ----
+    CommandInfo("get", Position.POS_RESTING, do_get, 0),
+    CommandInfo("prendi", Position.POS_RESTING, do_get, 0),
+    CommandInfo("drop", Position.POS_RESTING, do_drop, 0),
+    CommandInfo("lascia", Position.POS_RESTING, do_drop, 0),
+    CommandInfo("put", Position.POS_RESTING, do_put, 0),
+    CommandInfo("metti", Position.POS_RESTING, do_put, 0),
+    CommandInfo("give", Position.POS_RESTING, do_give, 0),
+    CommandInfo("dai", Position.POS_RESTING, do_give, 0),
+    CommandInfo("wear", Position.POS_RESTING, do_wear, 0),
+    CommandInfo("indossa", Position.POS_RESTING, do_wear, 0),
+    CommandInfo("wield", Position.POS_RESTING, do_wield, 0),
+    CommandInfo("impugna", Position.POS_RESTING, do_wield, 0),
+    CommandInfo("remove", Position.POS_RESTING, do_remove, 0),
+    CommandInfo("rimuovi", Position.POS_RESTING, do_remove, 0),
+    CommandInfo("drink", Position.POS_RESTING, do_drink, 0),
+    CommandInfo("bevi", Position.POS_RESTING, do_drink, 0),
+    CommandInfo("eat", Position.POS_RESTING, do_eat, 0),
+    CommandInfo("mangia", Position.POS_RESTING, do_eat, 0),
+    CommandInfo("inventory", Position.POS_DEAD, do_inventory, 0),
+    CommandInfo("inventario", Position.POS_DEAD, do_inventory, 0),
+    CommandInfo("i", Position.POS_DEAD, do_inventory, 0),
+    CommandInfo("equipment", Position.POS_DEAD, do_equipment, 0),
+    CommandInfo("equipaggiamento", Position.POS_DEAD, do_equipment, 0),
+    CommandInfo("eq", Position.POS_DEAD, do_equipment, 0),
+
+    # ---- Door commands (Phase 2) ----
+    CommandInfo("open", Position.POS_STANDING, _make_door_cmd(SCMD_OPEN), 0),
+    CommandInfo("apri", Position.POS_STANDING, _make_door_cmd(SCMD_OPEN), 0),
+    CommandInfo("close", Position.POS_STANDING, _make_door_cmd(SCMD_CLOSE), 0),
+    CommandInfo("chiudi", Position.POS_STANDING, _make_door_cmd(SCMD_CLOSE), 0),
+    CommandInfo("lock", Position.POS_STANDING, _make_door_cmd(SCMD_LOCK), 0),
+    CommandInfo("blocca", Position.POS_STANDING, _make_door_cmd(SCMD_LOCK), 0),
+    CommandInfo("unlock", Position.POS_STANDING, _make_door_cmd(SCMD_UNLOCK), 0),
+    CommandInfo("sblocca", Position.POS_STANDING, _make_door_cmd(SCMD_UNLOCK), 0),
+
+    # ---- Position commands (Phase 2) ----
+    CommandInfo("stand", Position.POS_SLEEPING, do_stand, 0),
+    CommandInfo("alzati", Position.POS_SLEEPING, do_stand, 0),
+    CommandInfo("sit", Position.POS_RESTING, do_sit, 0),
+    CommandInfo("siediti", Position.POS_RESTING, do_sit, 0),
+    CommandInfo("rest", Position.POS_RESTING, do_rest, 0),
+    CommandInfo("riposa", Position.POS_RESTING, do_rest, 0),
+    CommandInfo("sleep", Position.POS_SLEEPING, do_sleep, 0),
+    CommandInfo("dormi", Position.POS_SLEEPING, do_sleep, 0),
+    CommandInfo("wake", Position.POS_SLEEPING, do_wake, 0),
+    CommandInfo("svegliati", Position.POS_SLEEPING, do_wake, 0),
+
+    # ---- Follow/Group (Phase 2) ----
+    CommandInfo("follow", Position.POS_RESTING, do_follow, 0),
+    CommandInfo("segui", Position.POS_RESTING, do_follow, 0),
+    CommandInfo("group", Position.POS_RESTING, do_group, 0),
+    CommandInfo("gruppo", Position.POS_RESTING, do_group, 0),
 ]
+
 
 # Build a lookup dict for fast prefix matching
 _CMD_LOOKUP: dict[str, CommandInfo] = {}
@@ -397,6 +365,7 @@ def command_interpreter(
 
     Ported from command_interpreter() in interpreter.c.
     Uses prefix matching: 'n' matches 'north', 'lo' matches 'look'.
+    Also checks social commands if no built-in command matches.
     """
     argument = argument.strip()
     if not argument:
@@ -422,13 +391,23 @@ def command_interpreter(
                 matched = cmd
                 break
 
-    if matched is None:
-        _send(desc, "Huh?!?\r\n")
+    if matched is not None:
+        # Execute the built-in command
+        try:
+            matched.command_func(ch, cmd_args, desc, world)
+        except Exception:
+            log.exception("Error executing command '%s'", argument)
+            _send(desc, "Errore interno nel comando.\r\n")
         return
 
-    # Execute the command
-    try:
-        matched.command_func(ch, cmd_args, desc, world)
-    except Exception:
-        log.exception("Error executing command '%s'", argument)
-        _send(desc, "Errore interno nel comando.\r\n")
+    # Check social commands
+    social = find_social(cmd_word)
+    if social is not None:
+        try:
+            do_social(ch, cmd_args, desc, world, social)
+        except Exception:
+            log.exception("Error executing social '%s'", cmd_word)
+            _send(desc, "Errore interno nel comando.\r\n")
+        return
+
+    _send(desc, "Huh?!?\r\n")

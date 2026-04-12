@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from typing import Any
+
 from dalila.constants import (
     MAX_ABILITA,
     MAX_AFFECT,
@@ -18,6 +20,7 @@ from dalila.constants import (
     NOBODY,
     NOWHERE,
     NUM_WEARS,
+    Position,
 )
 from dalila.models.common import AffectedType, Bitvector, TrigProto
 
@@ -325,6 +328,12 @@ class CharData:
     iniz_ptagg: list[int] = field(default_factory=lambda: [0] * 6)
     iniz_da_aggiungere: int = 0
 
-    # Runtime reference to network descriptor (not persisted)
-    # Uses Any to avoid circular import with dalila.net.descriptor
+    # Runtime state (not persisted to playerfile)
+    # Uses Any/object to avoid circular import with dalila.net.descriptor
     desc: object | None = None
+    position: int = Position.POS_STANDING  # Current position
+    carrying: list[Any] = field(default_factory=list)  # Inventory (ObjData list)
+
+    # Follow/group (runtime pointers, not persisted)
+    master: object | None = None           # Who this char follows
+    followers: list[Any] = field(default_factory=list)  # Who follows this char

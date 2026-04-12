@@ -494,8 +494,8 @@ async def _handle_menu(
             desc.state = ConnState.CON_PLAYING
 
             # Show the room
-            from dalila.commands.interpreter import do_look
-            do_look(desc.character, "", desc, world)
+            from dalila.commands.informative import look_at_room
+            look_at_room(desc.character, desc, world)
 
         case "2":
             await desc.send(
