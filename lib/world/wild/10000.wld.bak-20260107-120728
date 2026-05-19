@@ -147,6 +147,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D1
+~
+~
+0 0 5639 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1875,6 +1879,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D1
+~
+~
+0 0 30600 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2257,15 +2265,5 @@ D1
 ~
 ~
 0 0 2184840 0
-S
-#1483419
-Largo sentiero battuto~
-Sei su un chiaro sentiero frequentato, largo circa un metro.
-~
-10000 0 10
-D0
-~
-~
-0 0 2185652 0
 S
 $

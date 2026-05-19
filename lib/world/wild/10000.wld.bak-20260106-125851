@@ -147,6 +147,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D1
+~
+~
+0 0 5639 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -595,6 +599,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D2
+~
+~
+0 0 2184052 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -603,6 +611,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D1
+~
+~
+0 0 30500 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -611,6 +623,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D1
+~
+~
+0 0 2184840 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -619,6 +635,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D3
+~
+~
+0 0 2184864 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -703,6 +723,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D0
+~
+~
+0 0 2185652 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -991,6 +1015,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D4
+~
+~
+0 0 1399 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1131,6 +1159,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D5
+~
+~
+0 0 5 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1503,6 +1535,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D4
+~
+~
+0 0 30 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1511,6 +1547,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D4
+~
+~
+0 0 19122 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -1875,6 +1915,10 @@ Ingresso area~
 Sei in un punto di accesso verso un'area del mondo.
 ~
 10000 0 1
+D1
+~
+~
+0 0 30600 0
 F
  0 0 0 0 0 0 0 0 0 0
 S
@@ -2213,59 +2257,5 @@ Mare di Daresia~
 Immensa distesa d'acqua salata, non distingui nessuna terra all'orizzonte voltato dalla Daresia
 ~
 10000 0 7
-S
-#1484421
-Largo sentiero battuto~
-Sei su un chiaro sentiero frequentato, largo circa un metro.
-~
-10000 0 10
-D1
-~
-~
-0 0 30500 0
-S
-#1479423
-Largo sentiero battuto~
-Sei su un chiaro sentiero frequentato, largo circa un metro.
-~
-10000 0 10
-D3
-~
-~
-0 0 2184864 0
-S
-#1475419
-Largo sentiero battuto~
-Sei su un chiaro sentiero frequentato, largo circa un metro.
-~
-10000 0 10
-D2
-~
-~
-0 0 2184052 0
-S
-#1479415
-Pianoro dell'Anduin (Sendaria)~
-Poche zone sono comparabili in bellezza con questo pianoro, circostante il bellissimo lago 
-Argento. Piccoli sedimenti roccioso sono sparsi per terra, quasi a simboleggiare quel grigio 
-chiaro riflesso dal lago. L'erba in questa zona trova uno spazio alquanto limitato tra le
-vaste zone ricoperte da ogni tipo di fiore da montagna. Avvicinandosi alle colline sovrastanti
-aumenta la presenza di alti pini.
-~
-10000 0 2
-D1
-~
-~
-0 0 2184840 0
-S
-#1483419
-Largo sentiero battuto~
-Sei su un chiaro sentiero frequentato, largo circa un metro.
-~
-10000 0 10
-D0
-~
-~
-0 0 2185652 0
 S
 $
